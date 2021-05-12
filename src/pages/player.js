@@ -11,7 +11,7 @@ const PlayerPage = ({ data }) => (
         <div key={work.id} className="showcase__item">
           <figure className="card">
             <Link to={`/players/${work.slug}`} className="card__image">
-              <Img fluid={work.coverImage.fluid} />
+              <Img fluid={work.coverImage && work.coverImage.fluid} />
             </Link>
             <figcaption className="card__caption">
               <h6 className="card__title">
