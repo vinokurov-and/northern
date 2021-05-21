@@ -66,6 +66,9 @@ const TemplateWrapper = ({ children }) => {
                   <Link to="/">Новости</Link>
                 </li>
                 <li>
+                  <Link to="/game">Игры</Link>
+                </li>
+                <li>
                   <Link to="/player">Наша команда</Link>
                 </li>
               </ul>

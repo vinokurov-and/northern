@@ -7,7 +7,6 @@ import Layout from "../components/layout";
 
 export default ({ data }) => (
   <Layout>
-    {console.log(data)}
     <article className="sheet">
       <HelmetDatoCms seo={data.datoCmsPlayer.seoMetaTags} />
       <div className="sheet__inner">
@@ -41,7 +40,7 @@ export default ({ data }) => (
 );
 
 export const query = graphql`
-  query PlayerWorkQuery($slug: String!) {
+  query PlayerPageQuery($slug: String!) {
     datoCmsPlayer(slug: { eq: $slug }) {
       seoMetaTags {
         ...GatsbyDatoCmsSeoMetaTags

@@ -21,6 +21,13 @@ exports.createPages = ({ graphql, actions }) => {
             }
           }
         }
+        allDatoCmsGame {
+          edges {
+            node {
+              slug
+            }
+          }
+        }
       }
     `).then((result) => {
       result.data.allDatoCmsWork.edges.map(({ node: work }) => {
@@ -42,6 +49,17 @@ exports.createPages = ({ graphql, actions }) => {
           },
         });
       });
+
+      result.data.allDatoCmsGame.edges.map(({ node: game }) => {
+        createPage({
+          path: `games/${game.slug}`,
+          component: path.resolve(`./src/templates/game.js`),
+          context: {
+            slug: game.slug,
+          },
+        });
+      });
+
       resolve();
     });
   });
