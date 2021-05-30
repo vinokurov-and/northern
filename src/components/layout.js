@@ -5,6 +5,7 @@ import PropTypes from "prop-types";
 import { Link } from "gatsby";
 import { StaticQuery, graphql } from "gatsby";
 import { HelmetDatoCms } from "gatsby-source-datocms";
+import { Helmet } from "react-helmet";
 
 import "../styles/index.sass";
 
@@ -49,6 +50,13 @@ const TemplateWrapper = ({ children }) => {
             favicon={data.datoCmsSite.faviconMetaTags}
             seo={data.datoCmsHome.seoMetaTags}
           />
+          <Helmet>
+            <script
+              data-ad-client="ca-pub-5506357121404841"
+              async
+              src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"
+            ></script>
+          </Helmet>
           <div className="container__sidebar">
             <div className="sidebar">
               <h6 className="sidebar__title">
