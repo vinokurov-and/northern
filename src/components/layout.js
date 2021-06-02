@@ -56,6 +56,7 @@ const TemplateWrapper = ({ children }) => {
               async
               src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"
             ></script>
+            <script type="text/javascript" src="//www.goalstream.org/api/connect/all.js?20"></script>
           </Helmet>
           <div className="container__sidebar">
             <div className="sidebar">
@@ -78,6 +79,9 @@ const TemplateWrapper = ({ children }) => {
                 </li>
                 <li>
                   <Link to="/player">Наша команда</Link>
+                </li>
+                <li>
+                  <Link to="/stats">Статистика</Link>
                 </li>
               </ul>
               <p className="sidebar__social">
