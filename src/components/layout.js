@@ -79,13 +79,13 @@ const TemplateWrapper = ({ children }) => {
                   <Link to="/">Новости</Link>
                 </li>
                 <li>
-                  <Link to="/game">Игры</Link>
-                </li>
-                <li>
                   <Link to="/player">Наша команда</Link>
                 </li>
                 <li>
-                  <Link to="/stats">Статистика за сезон 2021</Link>
+                  <Link to="/game">Игры (сезон 2021)</Link>
+                </li>
+                <li>
+                  <Link to="/stats">Статистика (сезон 2021)</Link>
                 </li>
               </ul>
 
