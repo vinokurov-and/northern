@@ -1,11 +1,11 @@
 import React from "react";
 import { AppBar, Toolbar, IconButton } from "@mui/material";
 import { LogoSvg } from "../../../../components/LogoSvg";
-import { Title } from "./styles";
+import { AppBarRoot, Title } from "./styles";
 
 export const Header = () => {
   return (
-    <AppBar>
+    <AppBarRoot>
       <Toolbar>
         <IconButton size="small">
           <LogoSvg />
@@ -15,6 +15,6 @@ export const Header = () => {
           Северный
         </Title>
       </Toolbar>
-    </AppBar>
+    </AppBarRoot>
   );
 };

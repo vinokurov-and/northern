@@ -10,6 +10,7 @@ import { Helmet } from "react-helmet";
 import "../styles/styles.css";
 import { LogoSvg } from "./LogoSvg";
 import { Layout } from "../core/ui/Layout";
+import { Slider } from "../core/ui/Slider";
 
 const TemplateWrapper = ({ children }) => {
   const [showMenu, setShowMenu] = useState(false);
@@ -48,6 +49,7 @@ const TemplateWrapper = ({ children }) => {
       `}
       render={(data) => (
         <Layout>
+        
           <div className={`container ${showMenu ? "is-open" : ""}`}>
             <HelmetDatoCms
               favicon={data.datoCmsSite.faviconMetaTags}
