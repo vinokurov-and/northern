@@ -21,6 +21,7 @@ module.exports = {
     `gatsby-plugin-react-helmet`,
     `gatsby-transformer-remark`,
     `gatsby-plugin-react-helmet`,
+    `gatsby-theme-material-ui`,
     {
       resolve: `gatsby-source-datocms`,
       options: {
