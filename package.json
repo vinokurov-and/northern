@@ -4,9 +4,10 @@
   "version": "1.0.0",
   "author": "Vinokurov Andrey <vinokurov_and@mail.ru>",
   "dependencies": {
-    "@emotion/react": "^11.10.4",
-    "@emotion/styled": "^11.10.4",
-    "@mui/material": "^5.10.10",
+    "@emotion/react": "^11.11.1",
+    "@emotion/styled": "^11.11.0",
+    "@mui/icons-material": "^5.11.16",
+    "@mui/material": "^5.13.5",
     "axios": "^0.27.2",
     "dotenv": "^8.1.0",
     "gatsby": "^2.24.81",
