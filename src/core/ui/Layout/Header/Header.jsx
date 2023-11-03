@@ -1,8 +1,8 @@
 import React from "react";
-import { AppBar, Toolbar, IconButton, Typography } from "@mui/material";
+import { Toolbar, IconButton, Typography } from "@mui/material";
 import TelegramIcon from '@mui/icons-material/Telegram';
 import { LogoSvg } from "../../../../components/LogoSvg";
-import { AppBarRoot, RightContainer, SocialContainer, Title } from "./styles";
+import { AppBarRoot, RightContainer, ScrollDownIconContainer, SocialContainer, Title } from "./styles";
 import { TELEGRAM_URI, VK_URI } from "../../../../config/social";
 
 export const Header = () => {
