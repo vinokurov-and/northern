@@ -31,6 +31,7 @@
   "main": "n/a",
   "scripts": {
     "dev": "next dev",
+    "server": "next dev -p 80",
     "build": "next build",
     "start": "next start",
     "format": "prettier --trailing-comma es5 --no-semi --single-quote --write \"src/**/*.js\"",
