@@ -1,9 +1,8 @@
 import React from "react";
 import Slider from "react-slick";
-import { HelmetDatoCms } from "gatsby-source-datocms";
-import Img from "gatsby-image";
-import { graphql } from "gatsby";
-import Layout from "../components/layout";
+import Img from "next/image";
+import Layout from "../../components/layout";
+import client from "../../utils/datacms";
 
 const settings = {
   infinite: true,
@@ -11,12 +10,10 @@ const settings = {
   slidesToShow: 2,
   slidesToScroll: 2,
 };
-
-export default ({ data }) => (
-  <Layout>
+const BaseGage = ({ data, item }) => (
+  <Layout data={data}>
     <article className="sheet">
-      <HelmetDatoCms seo={data.datoCmsGame.seoMetaTags} />
-      <Game datoCmsGame={data.datoCmsGame} />
+      <Game datoCmsGame={item.game} />
     </article>
   </Layout>
 );
@@ -53,8 +50,8 @@ export const Game = ({ datoCmsGame, isPreview }) => {
         <div className="sheet__inner">
           <div className="sheet__slider">
             <Slider {...settings}>
-              {datoCmsGame.gallery.map(({ fluid }) => (
-                <img alt={datoCmsGame.title} key={fluid.src} src={fluid.src} />
+              {datoCmsGame.gallery.map((item) => (
+                <img alt={datoCmsGame.title} key={item.src} src={item.src} />
               ))}
             </Slider>
           </div>
@@ -63,13 +60,13 @@ export const Game = ({ datoCmsGame, isPreview }) => {
       <div
         className="sheet__body"
         dangerouslySetInnerHTML={{
-          __html: datoCmsGame.descriptionNode.childMarkdownRemark.html,
+          __html: datoCmsGame.description,
         }}
       />
       <div className="sheet__inner">
         {datoCmsGame.image && (
           <div className="sheet__gallery">
-            <Img fluid={datoCmsGame.image.fluid} />
+            <Img src={datoCmsGame.image.fluid} />
           </div>
         )}
       </div>
@@ -77,33 +74,79 @@ export const Game = ({ datoCmsGame, isPreview }) => {
   );
 };
 
-export const query = graphql`
-  query GamePageQuery($slug: String!) {
-    datoCmsGame(slug: { eq: $slug }) {
-      date
-      teamHome
-      guestTeam
-      stadium
-      pointHome
-      pointGuest
-      id
-      slug
-      descriptionNode {
-        childMarkdownRemark {
-          html
-        }
-      }
-      image {
-        url
-        fluid(maxWidth: 600, imgixParams: { fm: "jpg", auto: "compress" }) {
-          ...GatsbyDatoCmsSizes
-        }
-      }
-      gallery {
-        fluid(maxWidth: 200, imgixParams: { fm: "jpg", auto: "compress" }) {
-          src
-        }
-      }
+export default BaseGage;
+
+const QUERY_BASE = `
+{
+  _site {
+    globalSeo {
+      siteName
+    }
+    faviconMetaTags {
+      tag
+      content
+      attributes
+      
+      __typename
     }
   }
-`;
+  home {
+     copyright
+    _seoMetaTags {
+      tag
+      content
+      attributes
+      __typename
+    }
+    introText
+  }
+  
+  allSocialProfiles {
+    profileType
+    url
+  }
+  
+}
+`
+
+const QUERY = (slug) => `
+{
+  game(filter:{
+  slug: {
+    in: "${slug}"
+  }
+}) {
+  date
+  teamHome
+  guestTeam
+  stadium
+  pointHome
+  pointGuest
+  id
+  slug
+  description
+  image {
+    url
+  }
+  gallery {
+    url
+  }
+}
+}`;
+
+export const getServerSideProps = async ({params}) => {
+  console.log(params)
+    const response = await client({
+      query: QUERY(params.slug)
+    })
+
+    console.log(response);
+  
+    const responseBase = await client({query: QUERY_BASE});
+  
+    
+    return {
+      props: {item: response.data, data: responseBase.data}
+    }
+  }
+  

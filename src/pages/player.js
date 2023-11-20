@@ -1,26 +1,27 @@
 import React from "react";
-import { Link, graphql } from "gatsby";
 import Masonry from "react-masonry-component";
-import Img from "gatsby-image";
+import Img from "next/image";
 import Layout from "../components/layout";
+import Link from "next/link";
+import client from "../utils/datacms";
 
-const PlayerPage = ({ data }) => (
-  <Layout>
+const PlayerPage = ({ data, player }) => (
+  <Layout data={data}>
     <Masonry className="showcase">
-      {data.allDatoCmsPlayer.edges.map(({ node: work }) => (
-        <div key={work.id} className="showcase__item">
+      {player.allPlayers.map((player) => (
+        <div key={player.id} className="showcase__item">
           <figure className="card">
-            {work.coverImage && (
-              <Link to={`/players/${work.slug}`} className="card__image">
-                <Img fluid={work.coverImage.fluid} />
+            {player.coverImage && (
+              <Link href={`/players/${player.slug}`} className="card__image">
+                <Img height={100} width={100} style={{width: '100%', height: 'auto'}} src={player.coverImage.url} alt={player.title} />
               </Link>
             )}
             <figcaption className="card__caption">
               <h6 className="card__title">
-                <Link to={`/players/${work.slug}`}>{work.title}</Link>
+                <Link href={`/players/${player.slug}`}>{player.title}</Link>
               </h6>
               <div className="card__description">
-                <p>{work.excerpt}</p>
+                <p>{player.excerpt}</p>
               </div>
             </figcaption>
           </figure>
@@ -30,24 +31,69 @@ const PlayerPage = ({ data }) => (
   </Layout>
 );
 
-export default PlayerPage;
-
-export const query = graphql`
-  query PlayerQuery {
-    allDatoCmsPlayer(sort: { fields: [position], order: ASC }) {
-      edges {
-        node {
-          id
-          title
-          slug
-          excerpt
-          coverImage {
-            fluid(maxWidth: 450, imgixParams: { fm: "jpg", auto: "compress" }) {
-              ...GatsbyDatoCmsSizes
-            }
-          }
-        }
-      }
+const QUERY = `
+{
+  allPlayers{
+    id
+    title
+    slug
+    excerpt
+    coverImage {
+      url
     }
   }
-`;
+}
+`
+
+const QUERY_BASE = `
+{
+  _site {
+    globalSeo {
+      siteName
+    }
+    faviconMetaTags {
+      tag
+      content
+      attributes
+      
+      __typename
+    }
+  }
+  home {
+     copyright
+    _seoMetaTags {
+      tag
+      content
+      attributes
+      __typename
+    }
+    introText
+  }
+  
+  allSocialProfiles {
+    profileType
+    url
+  }
+  
+}
+`
+
+export async function getInitialProps() {
+  const response = await client({
+    query: QUERY
+  })
+
+  const responseBase = await client({
+    query: QUERY_BASE
+  })
+
+  
+  // Обработка данных и передача их компоненту
+  return { player: response.data, data: responseBase.data }
+  
+}
+
+
+
+PlayerPage.getInitialProps = getInitialProps;
+export default PlayerPage;

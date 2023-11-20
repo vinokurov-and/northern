@@ -1,60 +1,19 @@
 /* eslint-disable jsx-a11y/anchor-has-content, jsx-a11y/anchor-is-valid*/
-
 import React, { useState } from "react";
 import PropTypes from "prop-types";
-import { Link } from "gatsby";
-import { StaticQuery, graphql } from "gatsby";
-import { HelmetDatoCms } from "gatsby-source-datocms";
+import Link from "next/link";
 import { Helmet } from "react-helmet";
 
-import "../styles/styles.css";
 import { LogoSvg } from "./LogoSvg";
 import { Layout } from "../core/ui/Layout";
-import { Slider } from "../core/ui/Slider";
 
-const TemplateWrapper = ({ children }) => {
+const TemplateWrapper = (props) => {
+  const {data, children, beforeMainChildren = null} = props;
   const [showMenu, setShowMenu] = useState(false);
   return (
-    <StaticQuery
-      query={graphql`
-        query LayoutQuery {
-          datoCmsSite {
-            globalSeo {
-              siteName
-            }
-            faviconMetaTags {
-              ...GatsbyDatoCmsFaviconMetaTags
-            }
-          }
-          datoCmsHome {
-            seoMetaTags {
-              ...GatsbyDatoCmsSeoMetaTags
-            }
-            introTextNode {
-              childMarkdownRemark {
-                html
-              }
-            }
-            copyright
-          }
-          allDatoCmsSocialProfile(sort: { fields: [position], order: ASC }) {
-            edges {
-              node {
-                profileType
-                url
-              }
-            }
-          }
-        }
-      `}
-      render={(data) => (
         <Layout>
-        
-          <div className={`container ${showMenu ? "is-open" : ""}`}>
-            <HelmetDatoCms
-              favicon={data.datoCmsSite.faviconMetaTags}
-              seo={data.datoCmsHome.seoMetaTags}
-            />
+          {beforeMainChildren}
+         <div className={`container ${showMenu ? "is-open" : ""}`}>
             <Helmet>
               <script
                 data-ad-client="ca-pub-5506357121404841"
@@ -69,34 +28,34 @@ const TemplateWrapper = ({ children }) => {
             <div className="container__sidebar">
               <div className="sidebar">
                 <h6 className="sidebar__title">
-                  <Link to="/">{data.datoCmsSite.globalSeo.siteName}</Link>
+                  <Link href="/">{data._site.globalSeo.siteName}</Link>
                 </h6>
                 <div
                   className="sidebar__intro"
                   dangerouslySetInnerHTML={{
                     __html:
-                      data.datoCmsHome.introTextNode.childMarkdownRemark.html
+                      data.home.introText
                   }}
                 />
                 <ul className="sidebar__menu">
                   <li>
-                    <Link to="/">Новости</Link>
+                    <Link href="/">Новости</Link>
                   </li>
                   <li>
-                    <Link to="/player">Наша команда</Link>
+                    <Link href="/player">Наша команда</Link>
                   </li>
                   <li>
-                    <Link to="/game">Игры (сезон 2021)</Link>
+                    <Link href="/game">Игры (сезон 2021)</Link>
                   </li>
                   <li>
-                    <Link to="/stats">Статистика (сезон 2021)</Link>
+                    <Link href="/stats">Статистика (сезон 2021)</Link>
                   </li>
                 </ul>
 
                 <LogoSvg />
 
                 <p className="sidebar__social">
-                  {data.allDatoCmsSocialProfile.edges.map(
+                  {data.allSocialProfiles?.edges?.map?.(
                     ({ node: profile }) => (
                       <a
                         key={profile.profileType}
@@ -110,7 +69,7 @@ const TemplateWrapper = ({ children }) => {
                   )}
                 </p>
                 <div className="sidebar__copyright">
-                  {data.datoCmsHome.copyright}
+                  {data.home.copyright}
                 </div>
               </div>
             </div>
@@ -127,7 +86,7 @@ const TemplateWrapper = ({ children }) => {
                     />
                   </div>
                   <div className="mobile-header__logo">
-                    <Link to="/">{data.datoCmsSite.globalSeo.siteName}</Link>
+                    <Link href="/">{data._site.globalSeo.siteName}</Link>
                   </div>
                 </div>
               </div>
@@ -135,8 +94,6 @@ const TemplateWrapper = ({ children }) => {
             </div>
           </div>
         </Layout>
-      )}
-    />
   );
 };
 

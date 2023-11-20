@@ -2,7 +2,6 @@ import React from "react";
 import { Slider } from "../Slider";
 import { Header } from "./Header";
 import { Main } from "./Main";
-import { GamesAnnouncementScreen } from "../../../screens/GamesAnnouncmentGames/GamesAnnouncmentGames";
 
 export const Layout = ({ children }) => {
   return (
@@ -10,8 +9,8 @@ export const Layout = ({ children }) => {
       <Header />
       <Slider />
       <Main>
-        <GamesAnnouncementScreen />
-        {children}</Main>
+        {children}
+      </Main>
     </>
   );
 };
