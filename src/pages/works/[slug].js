@@ -107,6 +107,14 @@ export const QUERY = (slug) =>  `
   }
 `;
 
+const QUERY_ALL_WORKS = `
+{
+  allWorks {
+    slug
+  }
+}
+`;
+
 
 const QUERY_BASE = `
 {
@@ -141,8 +149,22 @@ const QUERY_BASE = `
 }
 `
 
+export async function getStaticPaths() {
+  const response = await client({
+    query: QUERY_ALL_WORKS
+  });
 
-export const getServerSideProps = async ({params}) => {
+  const paths = response.data.allWorks.map((work) => {
+    return {
+      params: { slug: work.slug }
+    }
+  });
+
+  return { paths, fallback: false }
+}
+
+
+export const getStaticProps = async ({params}) => {
     const response = await client({
       query: QUERY(params.slug)
     })

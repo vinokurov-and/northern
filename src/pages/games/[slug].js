@@ -134,7 +134,30 @@ const QUERY = (slug) => `
 }
 }`;
 
-export const getServerSideProps = async ({params}) => {
+const QUERY_ALL_GAMES = `
+{
+  allGames {
+    slug
+  }
+}
+`
+
+export async function getStaticPaths() {
+  const response = await client({
+    query: QUERY_ALL_GAMES
+  });
+
+  const paths = response.data.allGames.map((game) => {
+    return {
+      params: { slug: game.slug }
+    }
+  });
+
+  return { paths, fallback: false }
+}
+
+
+export const getStaticProps = async ({params}) => {
   console.log(params)
     const response = await client({
       query: QUERY(params.slug)

@@ -67,6 +67,14 @@ const QUERY = (slug) => `
 }
 `;
 
+const QUERY_ALL_PLAYERS = `
+{
+  allPlayers {
+    slug
+  }
+}
+`;
+
 
 const QUERY_BASE = `
 {
@@ -126,8 +134,22 @@ const QUERY_BASE = `
 
 // PlayerSlug.getInitialProps = getInitialProps;
 
+export async function getStaticPaths() {
+  const response = await client({
+    query: QUERY_ALL_PLAYERS
+  });
 
-export const getServerSideProps = async ({params}) => {
+  const paths = response.data.allPlayers.map((player) => {
+    return {
+      params: { slug: player.slug }
+    }
+  });
+
+  return { paths, fallback: false }
+}
+
+
+export const getStaticProps = async ({params}) => {
   const response = await client({
     query: QUERY(params.slug)
   })

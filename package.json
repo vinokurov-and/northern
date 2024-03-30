@@ -16,11 +16,12 @@
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "react-head": "^3.4.0",
-    "react-helmet": "^5.2.1",
+    "react-helmet": "^6.1.0",
     "react-masonry-component": "^6.2.1",
     "react-query": "^3.39.2",
     "react-slick": "^0.29.0",
     "request": "^2.88.2",
+    "sharp": "^0.32.6",
     "slick-carousel": "^1.8.1",
     "swiper": "^11.0.4"
   },
@@ -31,16 +32,20 @@
   "main": "n/a",
   "scripts": {
     "dev": "next dev",
-    "server": "next dev -p 80",
+    "gitserver": "next dev -p 80",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 80",
     "format": "prettier --trailing-comma es5 --no-semi --single-quote --write \"src/**/*.js\"",
     "predeploy": "npm run build",
-    "deploy": "gh-pages -d public"
+    "deploy": "gh-pages -d public",
+    "publish": "node ./command/moveClientApp.js && npm run build && node ./command/publish.js"
   },
   "devDependencies": {
     "gh-pages": "^6.0.0",
+    "node-ssh": "^13.1.0",
+    "nodemon": "^3.1.0",
     "prettier": "^1.17.0",
-    "ssh2": "1.14.0"
+    "ssh2": "1.14.0",
+    "typescript": "^5.4.3"
   }
 }
