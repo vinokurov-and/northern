@@ -4,10 +4,9 @@ const app = express()
 const fs = require('fs'),
   http = require('http'),
   https = require('https');
-// const bodyParser = require('body-parser');
-// const fileUpload = require('express-fileupload');
+const bodyParser = require('body-parser');
+const fileUpload = require('express-fileupload');
 const { openDb } = require('./db/Connect');
-const multer = require('multer');
 
 let db;
 
@@ -46,8 +45,7 @@ const pathMap = new Set([
   '/news',
   '/player',
   '/game',
-  '/stats',
-  '/add'
+  '/stats'
 ]);
 
 
@@ -70,22 +68,7 @@ app.get('/c/news', async (req, res) => {
   }
 });
 
-app.get('/c/players', async (req, res) => {
-  try {
-    const result = await db.all("SELECT * FROM players");
-    res.send({ok: true, result});
-    return;
-  } catch (e) {
-    res.send({ ok: false, description: e.message });
-    return;
-  }
-})
-
-const storage = multer.memoryStorage();
-
-const upload = multer({ storage });
-
-app.post('/c/addNews', upload.any(), async (req, res) => {
+app.post('/c/addNews', bodyParser.json(), fileUpload({}), async (req, res) => {
   try {
     const { title, description, pass } = req.body;
     if (pass === 'sever') {
@@ -93,18 +76,11 @@ app.post('/c/addNews', upload.any(), async (req, res) => {
 
       const id = result.lastID;
 
-      if (req.files[0]) {
+      const url = path.join(process.cwd(), '..', 'img') + '/' + id + req.files.image.name;
+      req.files.image.mv(url);
+      console.log(url);
 
-        const split = req.files[0].originalname.split('.');
-        const fileExtension = split[split.length - 1]
-        const name = id + '.' + fileExtension;
-        const url = path.join(process.cwd(), '..', 'img') + '/' + name;
-        fs.writeFileSync(url, req.files[0].buffer)
-        console.log(url);
-
-        await db.run("UPDATE news SET image = ? WHERE id = ?", '/img/' + name, id);
-      }
-
+      await o.run("UPDATE news SET image = ? WHERE id = ?", '/img/' + id + req.files.image.name, id);
       res.send({ ok: true });
       return;
     } else {

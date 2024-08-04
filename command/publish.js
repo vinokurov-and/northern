@@ -33,9 +33,13 @@ ssh.connect({
         }).then((value) => {
             console.log('put directory out success' + String(value));
 
-            ssh.putDirectory(path.resolve(__dirname, '..', 'express-server'), '/fcsever/server', {
+            ssh.putDirectory(path.resolve(__dirname, '..', 'express-server'), '/fcsever/express-server', {
                 concurrency: 10,
                 recursive: true,
+                validate: function(itemPath) {
+                    const baseName = path.basename(itemPath)
+                    return baseName !== 'node_modules' && !itemPath.includes('db-northen.sqlite') // do not allow node_modules
+                },
                 tick: (localPath, _, error) => {
                     if (error) {
                         console.error('Error: ', error);
@@ -48,7 +52,7 @@ ssh.connect({
 
                 console.log('library server install...');
                 ssh.exec('npm i', ['--silent'], {
-                    cwd: '/fcsever/server'
+                    cwd: '/fcsever/express-server'
                 }).then((value) => {
                     console.log('library server install ' + value);
                     ssh.dispose();

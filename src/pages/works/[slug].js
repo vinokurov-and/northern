@@ -5,65 +5,80 @@ import Link from "next/link";
 import Layout from "../../components/layout";
 import { Game } from "../games/[slug]";
 import client from "../../utils/datacms";
+import { fetchData } from '../../utils/fetchData';
+import Head from "next/head";
 
 export default ({ data, game: gameData }) => {
-    const {work: game} = gameData;
-    console.log(gameData);
-    return (
-  <Layout data={data}>
-    <article className="sheet">
-      <div className="sheet__inner">
-        <h1 className="sheet__title">{game.title}</h1>
-        <p className="sheet__lead">{game.excerpt}</p>
-        {game.previewGame && (
-          <>
-            <p>
-              Игра команд {game.previewGame.teamHome} и{" "}
-              {game.previewGame.guestTeam} состоится на стадионе{" "}
-              {game.previewGame.stadium}{" "}
-              {new Date(game.previewGame.date).toLocaleString()}
-            </p>
-            <br />
-            <Link href={`/games/${game.previewGame.slug}`}>
-              Перейти на страницу игры
-            </Link>
-          </>
-        )}
+  const { work: game } = gameData;
 
-        <div className="sheet__slider">
-          <Slider infinite={true} slidesToShow={2} arrows>
-            {game.gallery.map((item) => (
-              <img
-                alt={game.title}
-                style={{width: '100%', height: 'auto'}}
-                key={item.url}
-                src={item.url}
+  return (
+    <>
+      <Head>
+        <title>{game.title}</title>
+        <meta name="title" content={game.title} />
+        <meta name="description" content={game.description} />
+      </Head>
+      <Layout data={data} disableSlider>
+        <article className="sheet">
+          <div className="sheet__inner">
+            <h1 className="sheet__title">{game.title}</h1>
+            <p className="sheet__lead">{game.excerpt}</p>
+            {game.previewGame && (
+              <>
+                <p>
+                  Игра команд {game.previewGame.teamHome} и{" "}
+                  {game.previewGame.guestTeam} состоится на стадионе{" "}
+                  {game.previewGame.stadium}{" "}
+                  {new Date(game.previewGame.date).toLocaleString()}
+                </p>
+                <br />
+                <Link href={`/games/${game.previewGame.slug}`}>
+                  Перейти на страницу игры
+                </Link>
+              </>
+            )}
+
+            <div className="sheet__slider">
+              <Slider infinite={true} slidesToShow={2} arrows>
+                {(game.gallery || []).map((item) => (
+                  <img
+                    alt={game.title}
+                    style={{ width: '100%', height: 'auto' }}
+                    key={item.url}
+                    src={item.url}
+                  />
+                ))}
+              </Slider>
+            </div>
+            {game.description && (
+              <div
+                className="sheet__body"
+                dangerouslySetInnerHTML={{
+                  __html: game.description,
+                }}
               />
-            ))}
-          </Slider>
-        </div>
-        {game.description && (
-          <div
-            className="sheet__body"
-            dangerouslySetInnerHTML={{
-              __html: game.description,
-            }}
-          />
-        )}
-        {game.game && (
-          <div className="sheet__gallery">
-            <Img width={100} height={100} style={{width: '100%', height: 'auto'}}  src={game.url} />
+            )}
+            {game.image && (
+              <div className="sheet__gallery">
+                <Img width={100} height={100} style={{ width: '100%', height: 'auto' }} src={game.image} />
+              </div>
+            )}
+            {game.game && (
+              <div className="sheet__gallery">
+                <Img width={100} height={100} style={{ width: '100%', height: 'auto' }} src={game.url} />
+              </div>
+            )}
           </div>
-        )}
-      </div>
-      {game.game && !game.previewGame && (
-        <Game datoCmsGame={game.game} isPreview />
-      )}
-    </article>
-  </Layout>
-)};
+          {game.game && !game.previewGame && (
+            <Game datoCmsGame={game.game} isPreview />
+          )}
+        </article>
+      </Layout>
+    </>
+  )
+};
 
-export const QUERY = (slug) =>  `
+export const QUERY = (slug) => `
 {
     work(filter:{
       slug: {
@@ -154,26 +169,49 @@ export async function getStaticPaths() {
     query: QUERY_ALL_WORKS
   });
 
+  const r = await fetchData('https://fc-sever.ru/c/news');
+
+  const news = JSON.parse(r).result;
+
   const paths = response.data.allWorks.map((work) => {
     return {
       params: { slug: work.slug }
     }
   });
 
+  news.forEach(element => {
+    paths.push({
+      params: {
+        slug: String(element.id)
+      },
+    })
+  });
+
+
   return { paths, fallback: false }
 }
 
 
-export const getStaticProps = async ({params}) => {
+export const getStaticProps = async ({ params }) => {
+
+  let game = {};
+  const isDigitsOnly = /^\d+$/.test(params.slug);
+  if (!isDigitsOnly) {
     const response = await client({
       query: QUERY(params.slug)
     })
-  
-    const responseBase = await client({query: QUERY_BASE});
-  
-    
-    return {
-      props: { game: response.data, data: responseBase.data }
-    }
+    game = response.data
+  } else {
+    const r = await fetchData('https://fc-sever.ru/c/news');
+    const news = JSON.parse(r).result;
+    game = { work: news.find(item => String(item.id) === String(params.slug)) };
   }
-  
+
+  console.log(game);
+
+  const responseBase = await client({ query: QUERY_BASE });
+
+  return {
+    props: { game, data: responseBase.data }
+  }
+}

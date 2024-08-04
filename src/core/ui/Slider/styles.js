@@ -6,13 +6,12 @@ export const SliderRoot = styled.div`
   background-image: url("https://www.datocms-assets.com/47837/1666304231-fcsever-edited.png");
   background-size: cover;
   background-repeat: no-repeat;
-  background-position: center;
+  background-position: right;
 `;
 export const ScrollDownIconContainer = styled('div')`
   position: absolute;
   bottom: 10px;
   left: 50%;
-  transform: translateX(-50%);
   cursor: pointer;
   animation: bounce 1s infinite;
 

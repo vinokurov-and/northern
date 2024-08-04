@@ -5,7 +5,7 @@ export const Title = styled(Typography)`
   text-transform: uppercase;
   font-weight: 600;
   color: ${({ theme }) => theme.palette.secondary[100]};
-  margin-right: 20px; // добавлен отступ
+  margin-right: ${({isMobile}) => (isMobile ? '0' : '20px')};
 `;
 
 export const AppBarRoot = styled(AppBar)`

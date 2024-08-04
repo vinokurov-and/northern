@@ -1,10 +1,13 @@
 import React from 'react';
+import { useMobile } from '../hooks/adaptive';
 
 export const LogoSvg = () => {
+  const isMobile = useMobile();
+
   return (
     <svg
-      width="100"
-      height="100"
+      width={isMobile ? '90' : "100"}
+      height={isMobile ? '90' : "100"}
       viewBox="0 0 2000 2000"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"

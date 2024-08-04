@@ -8,10 +8,10 @@ import { LogoSvg } from "./LogoSvg";
 import { Layout } from "../core/ui/Layout";
 
 const TemplateWrapper = (props) => {
-  const {data, children, beforeMainChildren = null} = props;
+  const {data, children, beforeMainChildren = null, disableSlider = false} = props;
   const [showMenu, setShowMenu] = useState(false);
   return (
-        <Layout>
+        <Layout disableSlider={disableSlider}>
           {beforeMainChildren}
          <div className={`container ${showMenu ? "is-open" : ""}`}>
             <Helmet>
@@ -38,8 +38,11 @@ const TemplateWrapper = (props) => {
                   }}
                 />
                 <ul className="sidebar__menu">
+                <li>
+                    <Link href="/">Главная</Link>
+                  </li>
                   <li>
-                    <Link href="/">Новости</Link>
+                    <Link href="/news">Новости</Link>
                   </li>
                   <li>
                     <Link href="/player">Наша команда</Link>
