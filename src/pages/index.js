@@ -87,19 +87,19 @@ function fetchData(url) {
   const https = require('https');
 
   return new Promise((resolve, reject) => {
-      https.get(url, { rejectUnauthorized: false }, (res) => {
-          let data = '';
+    https.get(url, { rejectUnauthorized: false }, (res) => {
+      let data = '';
 
-          res.on('data', (chunk) => {
-              data += chunk;
-          });
-
-          res.on('end', () => {
-              resolve(data);
-          });
-      }).on('error', (error) => {
-          reject(error);
+      res.on('data', (chunk) => {
+        data += chunk;
       });
+
+      res.on('end', () => {
+        resolve(data);
+      });
+    }).on('error', (error) => {
+      reject(error);
+    });
   });
 }
 
@@ -125,7 +125,12 @@ export const getStaticProps = async (data) => {
     playersDb = '{ "result": []  }'
   }
 
-  const jsonPlayersDb = JSON.parse(playersDb).result;
+  let jsonPlayersDb;
+  try {
+    jsonPlayersDb = JSON.parse(playersDb).result;
+  } catch {
+    jsonPlayersDb = [];
+  }
 
   const allPlayersDb = jsonPlayersDb.map(item => item.externalId);
 
@@ -138,7 +143,12 @@ export const getStaticProps = async (data) => {
     r = '{ "result": []  }'
   }
 
-  const news = JSON.parse(r).result;
+  let news;
+  try {
+    news = JSON.parse(r).result;
+  } catch {
+    news = [];
+  }
 
   const gamesHtml = await fetchHtml('https://kfl-football.ru/tournament/1033939/calendar?type=tours');
 

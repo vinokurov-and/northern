@@ -177,7 +177,12 @@ export async function getStaticPaths() {
   }
   
 
-  const news = JSON.parse(r).result;
+  let news;
+  try {
+    news = JSON.parse(r).result;
+  } catch {
+    news = [];
+  }
 
   const paths = response.data.allWorks.map((work) => {
     return {
@@ -208,8 +213,18 @@ export const getStaticProps = async ({ params }) => {
     })
     game = response.data
   } else {
-    const r = await fetchData('https://fc-sever.ru/c/news');
-    const news = JSON.parse(r).result;
+    let r;
+    try {
+      r = await fetchData('https://fc-sever.ru/c/news');
+    } catch {
+        r = '{ "result": []  }'
+    }
+    let news;
+    try {
+      news = JSON.parse(r).result;
+    } catch {
+      news = [];
+    }
     game = { work: news.find(item => String(item.id) === String(params.slug)) };
   }
 
