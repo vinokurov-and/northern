@@ -98,7 +98,12 @@ export const getStaticProps = async (data) => {
     r = '{ "result": []  }'
   }
   
-  const news = JSON.parse(r).result;
+  let news;
+  try {
+    news = JSON.parse(r).result;
+  } catch {
+    news = [];
+  }
 
   // Обработка данных и передача их компоненту
   return { props: { data: response.data, works: [...news.reverse(), ...response2.data.allWorks] } }
