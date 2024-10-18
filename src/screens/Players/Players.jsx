@@ -11,7 +11,7 @@ import 'swiper/css';
 import 'swiper/css/grid';
 import 'swiper/css/navigation';
 
-import './players.css';
+import './players.module.css';
 
 import { Grid, Navigation } from 'swiper/modules';
 
