@@ -118,15 +118,25 @@ export const getStaticProps = async (data) => {
     query: QUERY_ALL_PLAYERS
   });
 
-  const playersDb = await fetchData('https://fc-sever.ru/c/players');
-  console.log(playersDb);
+  let playersDb;
+  try {
+    playersDb = await fetchData('https://fc-sever.ru/c/players');
+  } catch {
+    playersDb = '{ "result": []  }'
+  }
+
   const jsonPlayersDb = JSON.parse(playersDb).result;
 
   const allPlayersDb = jsonPlayersDb.map(item => item.externalId);
 
   const allPlayers = playersResponse.data.allPlayers.filter(item => !allPlayersDb.includes(Number(item.id)));
 
-  const r = await fetchData('https://fc-sever.ru/c/news');
+  let r;
+  try {
+    r = await fetchData('https://fc-sever.ru/c/news');
+  } catch {
+    r = '{ "result": []  }'
+  }
 
   const news = JSON.parse(r).result;
 

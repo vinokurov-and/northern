@@ -169,7 +169,13 @@ export async function getStaticPaths() {
     query: QUERY_ALL_WORKS
   });
 
-  const r = await fetchData('https://fc-sever.ru/c/news');
+  let r;
+  try {
+    r = await fetchData('https://fc-sever.ru/c/news');
+  } catch {
+      r = '{ "result": []  }'
+  }
+  
 
   const news = JSON.parse(r).result;
 
