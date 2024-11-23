@@ -35,11 +35,11 @@ const sendPage = (template) => (req, res) => {
 };
 
 
-
-
 const options = {
-  key: fs.readFileSync('./cert/private.pem'),
-  cert: fs.readFileSync('./cert/public.pem'),
+  // key: fs.readFileSync('./cert/private.pem'),
+  // cert: fs.readFileSync('./cert/public.pem'),
+  key: fs.readFileSync('/etc/letsencrypt/live/fc-sever.ru/privkey.pem'),
+  cert: fs.readFileSync('/etc/letsencrypt/live/fc-sever.ru/fullchain.pem')
 };
 
 const pathMap = new Set([

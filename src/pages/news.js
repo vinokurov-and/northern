@@ -100,7 +100,7 @@ export const getStaticProps = async (data) => {
   
   let news;
   try {
-    news = JSON.parse(r).result;
+    news = JSON.parse(r).result || [];
   } catch {
     news = [];
   }

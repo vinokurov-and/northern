@@ -177,9 +177,9 @@ export async function getStaticPaths() {
   }
   
 
-  let news;
+  let news = [];
   try {
-    news = JSON.parse(r).result;
+    news = JSON.parse(r).result || [];
   } catch {
     news = [];
   }

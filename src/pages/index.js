@@ -127,7 +127,7 @@ export const getStaticProps = async (data) => {
 
   let jsonPlayersDb;
   try {
-    jsonPlayersDb = JSON.parse(playersDb).result;
+    jsonPlayersDb = JSON.parse(playersDb).result || [];
   } catch {
     jsonPlayersDb = [];
   }
@@ -145,7 +145,7 @@ export const getStaticProps = async (data) => {
 
   let news;
   try {
-    news = JSON.parse(r).result;
+    news = JSON.parse(r).result || [];
   } catch {
     news = [];
   }
