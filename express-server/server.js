@@ -72,7 +72,7 @@ app.get('/c/news', async (req, res) => {
 
 app.get('/c/players', async (req, res) => {
   try {
-    const result = await db.all("SELECT * FROM players");
+    const result = await db.all("SELECT * FROM players where players.hide is null or players.hide = 0");
     res.send({ok: true, result});
     return;
   } catch (e) {

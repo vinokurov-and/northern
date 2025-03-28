@@ -13,8 +13,8 @@ const TemplateWrapper = (props) => {
   return (
         <Layout disableSlider={disableSlider}>
           {beforeMainChildren}
-         <div className={`container ${showMenu ? "is-open" : ""}`}>
-            <Helmet>
+          {children}
+          <Helmet>
               <script
                 data-ad-client="ca-pub-5506357121404841"
                 async
@@ -25,19 +25,21 @@ const TemplateWrapper = (props) => {
                 src="//www.goalstream.org/api/connect/all.js?20"
               ></script>
             </Helmet>
-            <div className="container__sidebar">
-              <div className="sidebar">
-                <h6 className="sidebar__title">
+         {/* <div className={`container ${showMenu ? "is-open" : ""}`}> */}
+            
+            {/* <div className="container__sidebar">
+              <div className="sidebar"> */}
+                {/* <h6 className="sidebar__title">
                   <Link href="/">{data._site.globalSeo.siteName}</Link>
-                </h6>
-                <div
+                </h6> */}
+                {/* <div
                   className="sidebar__intro"
                   dangerouslySetInnerHTML={{
                     __html:
                       data.home.introText
                   }}
-                />
-                <ul className="sidebar__menu">
+                /> */}
+                {/* <ul className="sidebar__menu">
                 <li>
                     <Link href="/">Главная</Link>
                   </li>
@@ -53,11 +55,11 @@ const TemplateWrapper = (props) => {
                   <li>
                     <Link href="/stats">Статистика (сезон 2021)</Link>
                   </li>
-                </ul>
+                </ul> */}
 
-                <LogoSvg />
+                {/* <LogoSvg /> */}
 
-                <p className="sidebar__social">
+                {/* <p className="sidebar__social">
                   {data.allSocialProfiles?.edges?.map?.(
                     ({ node: profile }) => (
                       <a
@@ -73,29 +75,29 @@ const TemplateWrapper = (props) => {
                 </p>
                 <div className="sidebar__copyright">
                   {data.home.copyright}
-                </div>
-              </div>
-            </div>
-            <div className="container__body">
-              <div className="container__mobile-header">
-                <div className="mobile-header">
-                  <div className="mobile-header__menu">
+                </div> */}
+              {/* </div>
+            </div> */}
+            {/* <div className="container__body"> */}
+              {/* <div className="container__mobile-header"> */}
+                {/* <div className="mobile-header"> */}
+                  {/* <div className="mobile-header__menu"> */}
                     {/* eslint-disable-next-line */}
-                    <button
+                    {/* <button
                       onClick={(e) => {
                         e.preventDefault();
                         setShowMenu(!showMenu);
                       }}
-                    />
-                  </div>
-                  <div className="mobile-header__logo">
+                    /> */}
+                  {/* </div> */}
+                  {/* <div className="mobile-header__logo">
                     <Link href="/">{data._site.globalSeo.siteName}</Link>
-                  </div>
-                </div>
-              </div>
-              {children}
-            </div>
-          </div>
+                  </div> */}
+                {/* </div> */}
+              {/* </div> */}
+              
+            {/* </div> */}
+          {/* </div> */}
         </Layout>
   );
 };

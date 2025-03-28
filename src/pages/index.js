@@ -2,10 +2,8 @@ import React from "react";
 import Layout from "../components/layout";
 import client from "../utils/datacms";
 import { parse } from 'node-html-parser';
-// import { GamesAnnouncementScreen } from "../screens/GamesAnnouncmentGames/GamesAnnouncmentGames";
 import { News } from "../screens/News";
 import { Players } from "../screens/Players";
-import { QUERY_ALL_PLAYERS } from "../data/players/cmo";
 
 const QUERY = `
 {
@@ -114,10 +112,6 @@ export const getStaticProps = async (data) => {
     query: WORKS
   });
 
-  const playersResponse = await client({
-    query: QUERY_ALL_PLAYERS
-  });
-
   let playersDb;
   try {
     playersDb = await fetchData('https://fc-sever.ru/c/players');
@@ -132,9 +126,9 @@ export const getStaticProps = async (data) => {
     jsonPlayersDb = [];
   }
 
-  const allPlayersDb = jsonPlayersDb.map(item => item.externalId);
+  // const allPlayersDb = jsonPlayersDb.map(item => item.externalId);
 
-  const allPlayers = playersResponse.data.allPlayers.filter(item => !allPlayersDb.includes(Number(item.id)));
+  // const allPlayers = playersResponse.data.allPlayers.filter(item => !allPlayersDb.includes(Number(item.id)));
 
   let r;
   try {
@@ -180,7 +174,7 @@ export const getStaticProps = async (data) => {
   })
 
   // Обработка данных и передача их компоненту
-  return { props: { data: response.data, works: [...(news.reverse() || []), ...response2.data.allWorks], games, players: [...jsonPlayersDb, ...allPlayers] } }
+  return { props: { data: response.data, works: [...(news.reverse() || []), ...response2.data.allWorks], games, players: [...jsonPlayersDb] } }
 
 }
 

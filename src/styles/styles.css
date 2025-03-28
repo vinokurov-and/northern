@@ -487,7 +487,7 @@ img {
 
     .showcase__item {
         box-sizing: border-box;
-        width: 50%;
+        width: 100%;
         float: left;
         padding-left: 15px
     }
@@ -899,3 +899,24 @@ img {
 .slick-prev:before {
     color: #000 !important
 }
+
+.mySwiper {
+    width: 100%;
+    height: 700px;
+    margin-left: auto;
+    margin-right: auto;
+    overflow: visible !important;
+    --swiper-navigation-sides-offset: -44px;
+  }
+  
+  .swiper-slide {
+    text-align: center;
+    font-size: 18px;
+    background: #fff;
+    height: calc((100% - 30px) / 2) !important;
+  
+    /* Center slide text vertically */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }

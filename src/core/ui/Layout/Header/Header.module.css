@@ -1,0 +1,166 @@
+.header {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 1000;
+    background: rgba(40, 40, 90, 0.98);
+    backdrop-filter: blur(10px);
+    transition: all 0.3s ease;
+}
+
+.scrolled {
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    background: rgba(40, 40, 90, 0.95);
+}
+
+.headerContent {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0.8rem 2rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.logoContainer {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    text-decoration: none;
+    color: white;
+}
+
+.logo {
+    height: 40px;
+    width: auto;
+    transition: transform 0.3s ease;
+}
+
+.logoContainer:hover .logo {
+    transform: scale(1.05);
+}
+
+.brandInfo {
+    display: flex;
+    flex-direction: column;
+}
+
+.brandName {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    letter-spacing: 1px;
+    background: linear-gradient(45deg, #fff, #e0e0e0);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.brandDescription {
+    font-size: 0.75rem;
+    margin: 0;
+    color: #a0a0c0;
+    letter-spacing: 0.5px;
+}
+
+.navigation {
+    display: flex;
+    gap: 2rem;
+    align-items: center;
+}
+
+.navLink {
+    color: #fff;
+    text-decoration: none;
+    font-size: 1rem;
+    font-weight: 500;
+    padding: 0.5rem 0;
+    position: relative;
+    transition: color 0.3s ease;
+}
+
+.navLink::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 2px;
+    background: #fff;
+    transition: width 0.3s ease;
+}
+
+.navLink:hover {
+    color: #e0e0e0;
+}
+
+.navLink:hover::after {
+    width: 100%;
+}
+
+.actions {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.socialLink {
+    color: #fff;
+    text-decoration: none;
+    transition: opacity 0.3s ease;
+}
+
+.socialLink:hover {
+    opacity: 0.8;
+}
+
+.vkIcon {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.authButton {
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    color: white;
+    padding: 0.5rem 1.5rem;
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.authButton:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-1px);
+}
+
+@media (max-width: 1024px) {
+    .headerContent {
+        padding: 0.8rem 1rem;
+    }
+
+    .navigation {
+        gap: 1rem;
+    }
+
+    .brandName {
+        font-size: 1.2rem;
+    }
+
+    .brandDescription {
+        font-size: 0.7rem;
+    }
+}
+
+@media (max-width: 768px) {
+    .navigation {
+        display: none;
+    }
+
+    .headerContent {
+        justify-content: space-between;
+    }
+} 

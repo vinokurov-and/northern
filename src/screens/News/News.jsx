@@ -15,9 +15,9 @@ export const News = ({ works }) => {
     }
 
     return <Stack style={{
-        padding: isMobile ? '0 20px' : '0 40px'
+        padding: isMobile ? '0 20px' : '0 60px'
     }}>
-        <Stack direction='row' style={{ margin: isMobile ? '0 0 36px' : '0 0 50px' }} justifyContent={isMobile ? 'space-between' : 'left'} alignItems='center' gap='20px'>
+        <Stack direction='row' style={{ margin: isMobile ? '26px 0 36px' : '40px 0 50px' }} justifyContent={isMobile ? 'space-between' : 'left'} alignItems='center' gap='20px'>
             <h2 style={{
                 color: '#0F115F',
                 fontSize: isMobile ? '30px' : '68px',

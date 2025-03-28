@@ -11,8 +11,6 @@ import 'swiper/css';
 import 'swiper/css/grid';
 import 'swiper/css/navigation';
 
-import './players.module.css';
-
 import { Grid, Navigation } from 'swiper/modules';
 
 
@@ -28,7 +26,7 @@ export const Players = ({ data }) => {
     }
 
     return <Stack style={{
-        padding: isMobile ? '0 20px' : '0 40px'
+        padding: isMobile ? '0 20px' : '0 60px'
     }}>
         <Stack direction='row' style={{ margin: isMobile ? '0 0 36px' : '0 0 50px' }} justifyContent={isMobile ? 'space-between' : 'left'} alignItems='center' gap='20px'>
             <h2 style={{
