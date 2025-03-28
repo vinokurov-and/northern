@@ -22,6 +22,14 @@ export const Overlay = styled.div`
   );
   backdrop-filter: blur(1px);
   z-index: 1;
+
+  @media (max-width: 600px) {
+    background: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.5) 0%,
+      rgba(0, 0, 0, 0.7) 100%
+    );
+  }
 `;
 
 export const ContentWrapper = styled.div`
@@ -35,11 +43,18 @@ export const ContentWrapper = styled.div`
   justify-content: center;
   align-items: center;
   z-index: 2;
+  padding: 20px;
+
+  @media (max-width: 600px) {
+    justify-content: flex-end;
+    padding-bottom: 100px;
+  }
 `;
 
 export const TextContainer = styled.div`
   text-align: center;
   padding: 0 20px;
+  max-width: 100%;
 `;
 
 export const GradientText = styled(Typography)`
@@ -52,8 +67,17 @@ export const GradientText = styled(Typography)`
   margin-bottom: 1rem;
   letter-spacing: -1px;
 
+  @media (max-width: 900px) {
+    font-size: 3.5rem;
+  }
+
   @media (max-width: 600px) {
-    font-size: 3rem;
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+  }
+
+  @media (max-width: 400px) {
+    font-size: 2rem;
   }
 `;
 
@@ -74,6 +98,10 @@ export const ScrollDownIconContainer = styled.div`
     color: white;
     font-size: 4rem;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+
+    @media (max-width: 600px) {
+      font-size: 3rem;
+    }
   }
 
   @keyframes bounce {
@@ -89,4 +117,8 @@ export const ScrollDownIconContainer = styled.div`
   }
 
   animation: bounce 2s infinite;
+
+  @media (max-width: 600px) {
+    bottom: 20px;
+  }
 `;

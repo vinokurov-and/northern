@@ -103,7 +103,16 @@ export const Slider = () => {
                     mt: 2,
                     textShadow: '0 2px 4px rgba(0,0,0,0.3)',
                     opacity: 0.9,
-                    fontWeight: 500
+                    fontWeight: 500,
+                    fontSize: { 
+                      xs: '1rem',
+                      sm: '1.25rem',
+                      md: '1.5rem' 
+                    },
+                    lineHeight: { 
+                      xs: 1.4,
+                      sm: 1.5 
+                    }
                   }}
                 >
                   Сила команды в единстве и стремлении к победе
