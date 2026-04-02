@@ -1,0 +1,62 @@
+name: Deploy Northern
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Build & Deploy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Build static site
+        run: npm run build
+        env:
+          DATOCMS_API_TOKEN: ${{ secrets.DATOCMS_API_TOKEN }}
+
+      - name: Setup SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy static site
+        run: |
+          echo "Removing old static files..."
+          ssh root@${{ secrets.SERVER_HOST }} "rm -rf /fcsever/out"
+
+          echo "Uploading out/..."
+          scp -r out root@${{ secrets.SERVER_HOST }}:/fcsever/out
+
+          echo "Static site deployed"
+
+      - name: Deploy express-server
+        run: |
+          echo "Uploading express-server (excluding node_modules and db)..."
+          rsync -avz --delete \
+            --exclude 'node_modules' \
+            --exclude 'db-northen.sqlite' \
+            express-server/ root@${{ secrets.SERVER_HOST }}:/fcsever/express-server/
+
+          echo "Installing dependencies on remote..."
+          ssh root@${{ secrets.SERVER_HOST }} "cd /fcsever/express-server && npm i --silent"
+
+      - name: Restart express-server
+        run: |
+          ssh root@${{ secrets.SERVER_HOST }} "
+            screen -S server -X quit 2>/dev/null || true
+            cd /fcsever/express-server
+            screen -dmS server node server.js
+            echo 'Express server restarted in screen session: server'
+          "
