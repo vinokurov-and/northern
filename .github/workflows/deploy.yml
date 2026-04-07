@@ -3,6 +3,8 @@ name: Deploy Northern
 on:
   push:
     branches: [main]
+  repository_dispatch:
+    types: [deploy-client]
   workflow_dispatch:
 
 jobs:
@@ -15,6 +17,38 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '18'
+
+      # --- Сборка клиента Total (GameChallenge) ---
+      - name: Checkout Total client
+        uses: actions/checkout@v4
+        with:
+          repository: vinokurov-and/Game-Challenge
+          path: total
+          token: ${{ secrets.TOTAL_REPO_TOKEN }}
+
+      - name: Setup Node 20 for Total client
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build Total client (Expo web)
+        working-directory: total/client
+        run: |
+          npm ci
+          npx expo export --platform web --output-dir ./build
+
+      - name: Copy Total client to northern/public/app
+        run: |
+          rm -rf public/app
+          cp -r total/client/build public/app
+          echo "Client build copied to public/app/"
+          ls -la public/app/
+
+      - name: Restore Node 18 for Northern
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+      # --- Конец сборки клиента Total ---
 
       - name: Install dependencies
         run: npm install --legacy-peer-deps
