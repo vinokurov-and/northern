@@ -93,13 +93,31 @@ jobs:
             express-server/ root@${{ secrets.SERVER_HOST }}:/fcsever/express-server/
 
           echo "Installing dependencies on remote..."
-          ssh root@${{ secrets.SERVER_HOST }} "cd /fcsever/express-server && npm i --silent"
+          ssh root@${{ secrets.SERVER_HOST }} "export NVM_DIR=/root/.nvm && source \$NVM_DIR/nvm.sh && nvm use 20 && cd /fcsever/express-server && npm i --silent"
 
-      - name: Restart express-server
+      - name: Restart express-server (northern only)
         run: |
           ssh root@${{ secrets.SERVER_HOST }} "
             screen -S server -X quit 2>/dev/null || true
+            sleep 1
+            export NVM_DIR=/root/.nvm && source \$NVM_DIR/nvm.sh && nvm use 20
             cd /fcsever/express-server
-            screen -dmS server node server.js
-            echo 'Express server restarted in screen session: server'
+            screen -dmS server bash -c 'export NVM_DIR=/root/.nvm && source \$NVM_DIR/nvm.sh && nvm use 20 && node server.js'
+            sleep 3
+            if lsof -i:443 > /dev/null 2>&1; then
+              echo 'Northern express-server is running on port 443'
+            else
+              echo 'ERROR: Northern is not listening on port 443'
+              exit 1
+            fi
+            # Проверяем что total server-app тоже жив
+            if lsof -i:83 > /dev/null 2>&1; then
+              echo 'Total server-app is running on port 83'
+            else
+              echo 'WARNING: Total server-app is down, restarting...'
+              cd /mobile-app/app
+              screen -dmS server-app bash -c 'export NVM_DIR=/root/.nvm && source \$NVM_DIR/nvm.sh && nvm use 20 && exec stdbuf -oL node src/index.js >> /mobile-app/app/server.log 2>&1'
+              sleep 5
+              lsof -i:83 > /dev/null 2>&1 && echo 'Total restarted' || echo 'ERROR: Total failed to start'
+            fi
           "
