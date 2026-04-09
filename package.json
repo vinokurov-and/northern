@@ -20,7 +20,8 @@
     "swiper": "^11.1.15"
   },
   "keywords": [
-    "gatsby"
+    "football",
+    "fc-sever"
   ],
   "license": "MIT",
   "main": "n/a",
@@ -30,8 +31,6 @@
     "build": "next build",
     "start": "next start -p 80",
     "format": "prettier --trailing-comma es5 --no-semi --single-quote --write \"src/**/*.js\"",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d public",
     "publish": "node ./command/moveClientApp.js && npm run build && node ./command/publish.js"
   },
   "devDependencies": {
