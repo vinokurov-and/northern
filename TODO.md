@@ -1,5 +1,8 @@
 # TODO — Northern (fc-sever.ru)
 
+## Открытые
+Страница все игроки не работает.
+
 ## Удалить deprecated пакеты
 DONE. `@datocms/cma-client-node` — мигрировано на локальный SQLite API
 DONE. `request` — удалён (не использовался)
