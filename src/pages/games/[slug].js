@@ -1,15 +1,9 @@
 import React from "react";
-import Slider from "react-slick";
+import { ImageSlider } from "../../components/ImageSlider/ImageSlider";
 import Img from "next/image";
 import Layout from "../../components/layout";
 import client from "../../utils/datacms";
 
-const settings = {
-  infinite: true,
-  speed: 500,
-  slidesToShow: 2,
-  slidesToScroll: 2,
-};
 const BaseGage = ({ data, item }) => (
   <Layout data={data}>
     <article className="sheet">
@@ -49,11 +43,10 @@ export const Game = ({ datoCmsGame, isPreview }) => {
       {datoCmsGame.gallery && (
         <div className="sheet__inner">
           <div className="sheet__slider">
-            <Slider {...settings}>
-              {datoCmsGame.gallery.map((item) => (
-                <img alt={datoCmsGame.title} key={item.src} src={item.src} />
-              ))}
-            </Slider>
+            <ImageSlider
+              images={datoCmsGame.gallery.map(item => item.src || item.url)}
+              alt={datoCmsGame.title}
+            />
           </div>
         </div>
       )}

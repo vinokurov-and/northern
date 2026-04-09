@@ -1,5 +1,5 @@
 import React from "react";
-import Slider from "react-slick";
+import { ImageSlider } from "../../components/ImageSlider/ImageSlider";
 import Img from "next/image";
 import Layout from "../../components/layout";
 import client from "../../utils/datacms";
@@ -18,15 +18,10 @@ const PlayerSlug = ({ data, item, ...rest }) => {
         <h1 className="sheet__title">{player.title}</h1>
         <p className="sheet__lead">{player.excerpt}</p>
         <div className="sheet__slider">
-          <Slider infinite={true} slidesToShow={2} arrows>
-            {player.gallery?.map?.(({ p }) => (
-              <img
-                alt={p.title}
-                key={p.url}
-                src={p.url}
-              />
-            ))}
-          </Slider>
+          <ImageSlider
+            images={player.gallery?.map?.(item => item.url || item) || []}
+            alt={player.title}
+          />
         </div>
         <div
           className="sheet__body"

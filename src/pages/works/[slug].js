@@ -1,5 +1,5 @@
 import React from "react";
-import Slider from "react-slick";
+import { ImageSlider } from "../../components/ImageSlider/ImageSlider";
 import Img from "next/image";
 import Link from "next/link";
 import Layout from "../../components/layout";
@@ -39,16 +39,10 @@ export default ({ data, game: gameData }) => {
             )}
 
             <div className="sheet__slider">
-              <Slider infinite={true} slidesToShow={2} arrows>
-                {(game.gallery || []).map((item) => (
-                  <img
-                    alt={game.title}
-                    style={{ width: '100%', height: 'auto' }}
-                    key={item.url}
-                    src={item.url}
-                  />
-                ))}
-              </Slider>
+              <ImageSlider
+                images={(game.gallery || []).map(item => item.url)}
+                alt={game.title}
+              />
             </div>
             {game.description && (
               <div
