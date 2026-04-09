@@ -164,22 +164,26 @@ export const Header = () => {
               </Title>
             </Button>
             {s_0_600 && (
-              <Button 
-                color="inherit" 
+              <Button
+                variant="contained"
                 sx={{
-                  backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                  backgroundColor: '#FF6B35',
+                  color: '#fff',
                   fontSize: '0.8125rem',
                   height: '32px',
-                  px: '10px',
-                  borderRadius: '4px',
+                  px: '12px',
+                  borderRadius: '16px',
                   transition: 'all 0.2s ease',
                   whiteSpace: 'nowrap',
                   lineHeight: 1,
-                  fontWeight: 500,
+                  fontWeight: 600,
                   alignSelf: 'flex-start',
+                  textTransform: 'none',
+                  boxShadow: '0 2px 8px rgba(255, 107, 53, 0.4)',
                   '&:hover': {
-                    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                    backgroundColor: '#E55A2B',
                     transform: 'translateY(-1px)',
+                    boxShadow: '0 4px 12px rgba(255, 107, 53, 0.5)',
                   },
                   '&:active': {
                     transform: 'translateY(0)',
@@ -187,7 +191,7 @@ export const Header = () => {
                 }}
                 onClick={handleClick}
               >
-                Турнир прогнозистов
+                🎯 Угадай счёт
               </Button>
             )}
           </Stack>
@@ -201,21 +205,25 @@ export const Header = () => {
             flexGrow: 1,
             ml: 2
           }}>
-            <Button 
-              color="inherit" 
+            <Button
+              variant="contained"
               sx={{
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
+                backgroundColor: '#FF6B35',
+                color: '#fff',
                 fontSize: '0.875rem',
-                height: '34px',
-                px: '16px',
-                borderRadius: '4px',
+                height: '36px',
+                px: '20px',
+                borderRadius: '18px',
                 transition: 'all 0.2s ease',
                 whiteSpace: 'nowrap',
                 lineHeight: 1,
-                fontWeight: 500,
+                fontWeight: 600,
+                textTransform: 'none',
+                boxShadow: '0 2px 8px rgba(255, 107, 53, 0.4)',
                 '&:hover': {
-                  backgroundColor: 'rgba(255, 255, 255, 0.15)',
+                  backgroundColor: '#E55A2B',
                   transform: 'translateY(-1px)',
+                  boxShadow: '0 4px 12px rgba(255, 107, 53, 0.5)',
                 },
                 '&:active': {
                   transform: 'translateY(0)',
@@ -223,7 +231,7 @@ export const Header = () => {
               }}
               onClick={handleClick}
             >
-              Турнир прогнозистов
+              🎯 Угадай счёт
             </Button>
           </Box>
         )}
