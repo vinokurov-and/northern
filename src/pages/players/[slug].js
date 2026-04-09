@@ -10,11 +10,12 @@ const PlayerSlug = ({ data, item, ...rest }) => {
 
   const { player } = item || {};
 
+  if (!player) return <Layout data={data}><p>Игрок не найден</p></Layout>;
+
   return (
     <Layout data={data}>
     <article className="sheet">
       <div className="sheet__inner">
-        {console.log(player.title)}
         <h1 className="sheet__title">{player.title}</h1>
         <p className="sheet__lead">{player.excerpt}</p>
         <div className="sheet__slider">
@@ -140,7 +141,7 @@ export async function getStaticPaths() {
     }
   });
 
-  return { paths, fallback: false }
+  return { paths, fallback: 'blocking' }
 }
 
 
