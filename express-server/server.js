@@ -81,6 +81,91 @@ app.get('/c/players', async (req, res) => {
   }
 })
 
+// === API для данных (замена DatoCMS) ===
+
+app.get('/c/site-settings', async (req, res) => {
+  try {
+    const rows = await db.all("SELECT key, value FROM site_settings");
+    const settings = {};
+    rows.forEach(r => { settings[r.key] = r.value; });
+    // Парсим JSON-поля
+    try { settings.faviconMetaTags = JSON.parse(settings.faviconMetaTags); } catch {}
+    try { settings.seoMetaTags = JSON.parse(settings.seoMetaTags); } catch {}
+    const socialProfiles = await db.all("SELECT profileType, url FROM social_profiles");
+    res.send({ ok: true, result: { ...settings, socialProfiles } });
+  } catch (e) {
+    res.send({ ok: false, description: e.message });
+  }
+});
+
+app.get('/c/games-content', async (req, res) => {
+  try {
+    const result = await db.all("SELECT * FROM games_content");
+    result.forEach(r => { try { r.gallery = JSON.parse(r.gallery); } catch {} });
+    res.send({ ok: true, result });
+  } catch (e) {
+    res.send({ ok: false, description: e.message });
+  }
+});
+
+app.get('/c/games-content/:slug', async (req, res) => {
+  try {
+    const result = await db.get("SELECT * FROM games_content WHERE slug = ?", req.params.slug);
+    if (result) {
+      try { result.gallery = JSON.parse(result.gallery); } catch {}
+    }
+    res.send({ ok: true, result: result || null });
+  } catch (e) {
+    res.send({ ok: false, description: e.message });
+  }
+});
+
+app.get('/c/works', async (req, res) => {
+  try {
+    const result = await db.all("SELECT id, slug, title, excerpt, coverImage FROM works");
+    res.send({ ok: true, result });
+  } catch (e) {
+    res.send({ ok: false, description: e.message });
+  }
+});
+
+app.get('/c/works/:slug', async (req, res) => {
+  try {
+    const work = await db.get("SELECT * FROM works WHERE slug = ?", req.params.slug);
+    if (work) {
+      try { work.gallery = JSON.parse(work.gallery); } catch {}
+      if (work.gameSlug) {
+        work.game = await db.get("SELECT * FROM games_content WHERE slug = ?", work.gameSlug);
+        if (work.game) { try { work.game.gallery = JSON.parse(work.game.gallery); } catch {} }
+      }
+    }
+    res.send({ ok: true, result: work || null });
+  } catch (e) {
+    res.send({ ok: false, description: e.message });
+  }
+});
+
+app.get('/c/players-content', async (req, res) => {
+  try {
+    const result = await db.all("SELECT id, slug, title, excerpt, coverImage FROM players_content");
+    res.send({ ok: true, result });
+  } catch (e) {
+    res.send({ ok: false, description: e.message });
+  }
+});
+
+app.get('/c/players-content/:slug', async (req, res) => {
+  try {
+    const result = await db.get("SELECT * FROM players_content WHERE slug = ?", req.params.slug);
+    if (result) {
+      try { result.gallery = JSON.parse(result.gallery); } catch {}
+    }
+    res.send({ ok: true, result: result || null });
+  } catch (e) {
+    res.send({ ok: false, description: e.message });
+  }
+});
+
 const storage = multer.memoryStorage();
 
 const upload = multer({ storage });
@@ -169,17 +254,26 @@ app.get('/app/*', async (req, res) => {
   }
 
   // OG-теги для ботов (VK, Telegram, WhatsApp)
-  const ua = (req.headers['user-agent'] || '').toLowerCase();
-  const isBot = ua.includes('bot') || ua.includes('crawler') || ua.includes('spider')
-    || ua.includes('vkshare') || ua.includes('telegram') || ua.includes('whatsapp')
-    || ua.includes('facebookexternalhit') || ua.includes('twitterbot');
+  const botUa = (req.headers['user-agent'] || '').toLowerCase();
+  const isBot = botUa.includes('bot') || botUa.includes('crawler') || botUa.includes('spider')
+    || botUa.includes('vkshare') || botUa.includes('telegram') || botUa.includes('whatsapp')
+    || botUa.includes('facebookexternalhit') || botUa.includes('twitterbot');
 
-  if (isBot && req.query.id && req.path.includes('/page/team')) {
-    // Динамические OG-теги для страницы команды
+  if (isBot && req.path.includes('/page/') && req.query.id) {
     try {
-      const https = require('https');
-      const teamData = await new Promise((resolve, reject) => {
-        const postData = JSON.stringify({ pageId: 'team', id: req.query.id });
+      // Определяем pageId из пути: /app/page/team → team, /app/page/game → game
+      const pathParts = req.path.split('/');
+      const pageId = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
+
+      const descriptions = {
+        team: 'Статистика, форма, расписание матчей и прогнозы. Соревнуйся с друзьями!',
+        game: 'Сделай прогноз на матч и соревнуйся с друзьями в рейтинге!',
+      };
+
+      // Запрашиваем данные страницы для получения title
+      const apiHttp = require('https');
+      const pageData = await new Promise((resolve) => {
+        const postData = JSON.stringify({ pageId, id: req.query.id });
         const options = {
           hostname: 'api.fc-sever.ru',
           port: 83,
@@ -187,31 +281,50 @@ app.get('/app/*', async (req, res) => {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
           rejectUnauthorized: false,
+          timeout: 5000,
         };
-        const r = https.request(options, (resp) => {
+        const r = apiHttp.request(options, (resp) => {
           let data = '';
           resp.on('data', c => data += c);
           resp.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(null); } });
         });
         r.on('error', () => resolve(null));
+        r.on('timeout', () => { r.destroy(); resolve(null); });
         r.write(postData);
         r.end();
       });
 
-      if (teamData && teamData.ok) {
-        const title = teamData.result?.header?.headerLeft?.props?.title || 'GameChallenge';
-        const html = fs.readFileSync(appHtmlPath, 'utf-8');
-        const ogTags = `
-          <meta property="og:title" content="${title} — GameChallenge" />
-          <meta property="og:description" content="Статистика, расписание и прогнозы на матчи. Соревнуйся с друзьями!" />
-          <meta property="og:url" content="https://fc-sever.ru${req.originalUrl}" />
-          <meta property="og:type" content="website" />
-          <meta property="og:site_name" content="GameChallenge" />
-        `;
-        const modifiedHtml = html.replace('</head>', ogTags + '</head>');
-        res.send(modifiedHtml);
-        return;
-      }
+      const title = pageData?.result?.header?.headerLeft?.props?.title || 'GameChallenge';
+      const description = descriptions[pageId] || 'Прогнозируй матчи КФЛ и соревнуйся с друзьями!';
+
+      const html = fs.readFileSync(appHtmlPath, 'utf-8');
+      const ogTags = `
+        <meta property="og:title" content="${title} — GameChallenge" />
+        <meta property="og:description" content="${description}" />
+        <meta property="og:url" content="https://fc-sever.ru${req.originalUrl}" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="GameChallenge" />
+      `;
+      const modifiedHtml = html.replace('</head>', ogTags + '</head>');
+      res.send(modifiedHtml);
+      return;
+    } catch (e) {}
+  }
+
+  // OG-теги для остальных /app/* (общие)
+  if (isBot) {
+    try {
+      const html = fs.readFileSync(appHtmlPath, 'utf-8');
+      const ogTags = `
+        <meta property="og:title" content="GameChallenge — Прогнозы на матчи КФЛ" />
+        <meta property="og:description" content="Делай прогнозы на матчи Калужской футбольной лиги и соревнуйся с друзьями в рейтинге!" />
+        <meta property="og:url" content="https://fc-sever.ru${req.originalUrl}" />
+        <meta property="og:type" content="website" />
+        <meta property="og:site_name" content="GameChallenge" />
+      `;
+      const modifiedHtml = html.replace('</head>', ogTags + '</head>');
+      res.send(modifiedHtml);
+      return;
     } catch (e) {}
   }
 
