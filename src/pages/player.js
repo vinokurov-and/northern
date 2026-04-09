@@ -1,5 +1,4 @@
 import React from "react";
-import Masonry from "react-masonry-component";
 import Img from "next/image";
 import Layout from "../components/layout";
 import Link from "next/link";
@@ -7,7 +6,7 @@ import client from "../utils/datacms";
 
 const PlayerPage = ({ data, player }) => (
   <Layout data={data}>
-    <Masonry className="showcase">
+    <div className="showcase">
       {player.allPlayers.map((player) => (
         <div key={player.id} className="showcase__item">
           <figure className="card">
@@ -27,7 +26,7 @@ const PlayerPage = ({ data, player }) => (
           </figure>
         </div>
       ))}
-    </Masonry>
+    </div>
   </Layout>
 );
 

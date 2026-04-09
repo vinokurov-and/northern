@@ -1,5 +1,4 @@
 import React from "react";
-import Masonry from "react-masonry-component";
 import Img from "next/image";
 import Layout from "../components/layout";
 import Link from "next/link";
@@ -10,7 +9,7 @@ const NewsPage = (props) => {
   const { data, works } = props;
   return (
     <Layout data={data}>
-      <Masonry className="showcase">
+      <div className="showcase">
         {works.map((work) => {
           return (
             <div key={work.id} className="showcase__item">
@@ -30,7 +29,7 @@ const NewsPage = (props) => {
             </div>
           )
         })}
-      </Masonry>
+      </div>
     </Layout>
   )
 };
