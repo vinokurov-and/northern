@@ -5,24 +5,35 @@ import Link from "next/link";
 import client from "../utils/datacms";
 import { fetchData } from "../utils/fetchData";
 
+const DEFAULT_IMAGE = '/img/default-news.jpg';
+
 const NewsPage = (props) => {
   const { data, works } = props;
   return (
     <Layout data={data}>
       <div className="showcase">
         {works.map((work) => {
+          const imageSrc = work.coverImage?.url || work.image || DEFAULT_IMAGE;
+          const href = work.slug ? `/works/${work.slug}` : '#';
+
           return (
             <div key={work.id} className="showcase__item">
               <figure className="card">
-                <Link href={`/works/${work.slug || work.id}`} className="card__image">
-                  <Img style={{ position: 'relative', width: '100%', height: 'auto' }} width={200} height={200} src={work.coverImage?.url || work.image} />
-                </Link>
+                {imageSrc && imageSrc !== DEFAULT_IMAGE ? (
+                  <Link href={href} className="card__image">
+                    <Img style={{ position: 'relative', width: '100%', height: 'auto' }} width={200} height={200} src={imageSrc} alt={work.title || ''} />
+                  </Link>
+                ) : null}
                 <figcaption className="card__caption">
                   <h6 className="card__title">
-                    <Link href={`/works/${work.slug || work.id}`}>{work.title}</Link>
+                    {work.slug ? (
+                      <Link href={href}>{work.title}</Link>
+                    ) : (
+                      work.title
+                    )}
                   </h6>
                   <div className="card__description">
-                    <p>{work.excerpt || work.description}</p>
+                    <p>{work.excerpt || (work.description || '').substring(0, 150)}</p>
                   </div>
                 </figcaption>
               </figure>
@@ -46,7 +57,7 @@ const WORKS = `
     }
   }
 }
-`
+`;
 
 const QUERY = `
 {
@@ -58,7 +69,6 @@ const QUERY = `
       tag
       content
       attributes
-      
       __typename
     }
   }
@@ -72,43 +82,29 @@ const QUERY = `
     }
     introText
   }
-  
   allSocialProfiles {
     profileType
     url
   }
-  
 }
-`
+`;
 
-export const getStaticProps = async (data) => {
-  const response = await client({
-    query: QUERY
-  });
+export const getStaticProps = async () => {
+  const response = await client({ query: QUERY });
+  const response2 = await client({ query: WORKS });
 
-  const response2 = await client({
-    query: WORKS
-  });
-
-  let r;
+  let news = [];
   try {
-    r = await fetchData('https://fc-sever.ru/c/news');
-  } catch {
-    r = '{ "result": []  }'
-  }
-  
-  let news;
-  try {
+    const r = await fetchData('https://fc-sever.ru/c/news');
     news = JSON.parse(r).result || [];
-  } catch {
-    news = [];
-  }
+  } catch {}
 
-  // Обработка данных и передача их компоненту
-  return { props: { data: response.data, works: [...news.reverse(), ...response2.data.allWorks] } }
-
-}
-
-
+  return {
+    props: {
+      data: response.data || {},
+      works: [...news.reverse(), ...(response2.data?.allWorks || [])],
+    },
+  };
+};
 
 export default NewsPage;
