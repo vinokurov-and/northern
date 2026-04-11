@@ -1,9 +1,14 @@
 # TODO — Northern (fc-sever.ru)
 
 ## Баги
+DONE. Новости отображались в обратном порядке (старые сверху). Корень: VK импорт через wall.get идёт от новых к старым → insertion order в БД соответствует "малый id = новый пост". Старый код делал news.reverse(), что давало старые сверху. Убрал reverse() в news.js, добавил `ORDER BY id ASC` в `/c/news` для явности. Долгосрочно — добавить колонку `date` в таблицу `news` и сортировать по ней (новый импорт VK должен сохранять wall_post.date)
 - Страница "все игроки" не работает
 - При клике на игрока страница прыгает вверх (scroll reset)
 - Страница /analytics не открывается
+- Ускорить деплой. Сейчас npm i - 1m. 34s. build total client - 38s. 
+
+## CI/CD
+DONE. fix: deploy зависал на ~8+ минут на шаге "Deploy static site" — `scp -r out` через тысячи мелких файлов в `_expo/static/js/web/` без keepalive молча зависал, ssh-сессия рвалась но scp на runner'е этого не замечал. Заменено на `rsync -az --delete --partial` + ServerAliveInterval=30 + ConnectTimeout=30 + timeout-minutes на шагах деплоя
 
 ## Ускорение сборки (текущее время ~8.5с, ~650ms на каждую SSG-страницу)
 - Кешировать QUERY_BASE в datacms.js — site settings одинаковый для всех страниц, сейчас запрашивается ~50 раз

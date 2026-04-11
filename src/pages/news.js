@@ -99,10 +99,14 @@ export const getStaticProps = async () => {
     news = JSON.parse(r).result || [];
   } catch {}
 
+  // VK новости импортированы через wall.get (новые → старые), insertion order
+  // в SQLite соответствует id ASC, значит малый id = новый пост, большой id = старый.
+  // Без сортировки SELECT * FROM news возвращает id ASC, что уже даёт "новые сверху".
+  // (Раньше тут был .reverse() который выдавал старые первыми.)
   return {
     props: {
       data: response.data || {},
-      works: [...news.reverse(), ...(response2.data?.allWorks || [])],
+      works: [...news, ...(response2.data?.allWorks || [])],
     },
   };
 };

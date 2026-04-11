@@ -61,7 +61,10 @@ app.get('/games/:gameID', sendPage('games/[gameID].html'));
 
 app.get('/c/news', async (req, res) => {
   try {
-    const result = await db.all("SELECT * FROM news");
+    // VK новости были импортированы через wall.get (новые VK → старые),
+    // insertion order совпадает с id, значит ORDER BY id ASC выдаёт новые VK сверху.
+    // Если в будущем добавить колонку date — сортировать по ней DESC.
+    const result = await db.all("SELECT * FROM news ORDER BY id ASC");
     res.send({ ok: true, result });
     return;
   } catch (e) {
