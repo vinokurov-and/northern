@@ -72,30 +72,46 @@ jobs:
           mkdir -p ~/.ssh
           echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
           chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+          ssh-keyscan -T 10 -H ${{ secrets.SERVER_HOST }} >> ~/.ssh/known_hosts
+          # Keepalive — без него scp/rsync через тысячи мелких файлов
+          # может молча зависнуть на оборванном соединении
+          cat > ~/.ssh/config <<'EOF'
+          Host *
+            ServerAliveInterval 30
+            ServerAliveCountMax 3
+            ConnectTimeout 30
+            TCPKeepAlive yes
+          EOF
+          chmod 600 ~/.ssh/config
 
       - name: Deploy static site
+        timeout-minutes: 10
         run: |
-          echo "Removing old static files..."
-          ssh root@${{ secrets.SERVER_HOST }} "rm -rf /fcsever/out"
-
-          echo "Uploading out/..."
-          scp -r out root@${{ secrets.SERVER_HOST }}:/fcsever/out
+          echo "Syncing out/ to remote (rsync, не scp — из-за тысяч мелких файлов в _expo/)..."
+          # rsync с --delete: атомарный delta-sync, быстрее scp в 5-10 раз для тысяч файлов,
+          # надёжнее при разрывах (re-connect не теряет прогресс).
+          # На сервере rsync должен быть установлен (есть, используется ниже для express-server).
+          rsync -az --delete --partial \
+            -e "ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3" \
+            out/ root@${{ secrets.SERVER_HOST }}:/fcsever/out/
 
           echo "Static site deployed"
 
       - name: Deploy express-server
+        timeout-minutes: 10
         run: |
           echo "Uploading express-server (excluding node_modules and db)..."
           rsync -avz --delete \
             --exclude 'node_modules' \
             --exclude 'db-northen.sqlite' \
+            -e "ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3" \
             express-server/ root@${{ secrets.SERVER_HOST }}:/fcsever/express-server/
 
           echo "Installing dependencies on remote..."
           ssh root@${{ secrets.SERVER_HOST }} "export NVM_DIR=/root/.nvm && source \$NVM_DIR/nvm.sh && nvm use 20 && cd /fcsever/express-server && npm i --silent"
 
       - name: Restart express-server (northern only)
+        timeout-minutes: 5
         run: |
           ssh root@${{ secrets.SERVER_HOST }} "
             screen -S server -X quit 2>/dev/null || true
