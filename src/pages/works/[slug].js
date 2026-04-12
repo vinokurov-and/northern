@@ -200,20 +200,21 @@ export async function getStaticPaths() {
 
 
 export const getStaticProps = async ({ params }) => {
+  const isDigitsOnly = /^\d+$/.test(params.slug);
+
+  // Запускаем QUERY_BASE параллельно с основным запросом
+  const basePromise = client({ query: QUERY_BASE });
 
   let game = {};
-  const isDigitsOnly = /^\d+$/.test(params.slug);
   if (!isDigitsOnly) {
-    const response = await client({
-      query: QUERY(params.slug)
-    })
-    game = response.data
+    const response = await client({ query: QUERY(params.slug) });
+    game = response.data;
   } else {
     let r;
     try {
       r = await fetchData('https://fc-sever.ru/c/news');
     } catch {
-        r = '{ "result": []  }'
+      r = '{ "result": []  }';
     }
     let news;
     try {
@@ -225,7 +226,7 @@ export const getStaticProps = async ({ params }) => {
     game = { work: found || null };
   }
 
-  const responseBase = await client({ query: QUERY_BASE });
+  const responseBase = await basePromise;
 
   // JSON round-trip удаляет undefined-поля (Next.js не умеет их сериализовать)
   return {

@@ -146,13 +146,11 @@ export async function getStaticPaths() {
 
 
 export const getStaticProps = async ({params}) => {
-  const response = await client({
-    query: QUERY(params.slug)
-  })
+  const [response, responseBase] = await Promise.all([
+    client({ query: QUERY(params.slug) }),
+    client({ query: QUERY_BASE }),
+  ]);
 
-  const responseBase = await client({query: QUERY_BASE});
-
-  
   return {
     props: {item: response.data, data: responseBase.data}
   }

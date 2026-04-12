@@ -79,8 +79,10 @@ const QUERY_BASE = `
 `;
 
 export async function getStaticProps() {
-  const response = await client({ query: QUERY });
-  const responseBase = await client({ query: QUERY_BASE });
+  const [response, responseBase] = await Promise.all([
+    client({ query: QUERY }),
+    client({ query: QUERY_BASE }),
+  ]);
 
   return {
     props: {

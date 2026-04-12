@@ -3,6 +3,9 @@
 
 const API_BASE = 'https://fc-sever.ru';
 
+// Кеш site-settings — одинаковый для всех страниц, не нужно запрашивать ~50 раз при билде
+let siteSettingsCache = null;
+
 export const fetchLocal = async (endpoint) => {
     try {
         const response = await fetch(`${API_BASE}${endpoint}`, {
@@ -26,7 +29,10 @@ export const client = async ({ query }) => {
     const data = {};
 
     if (query.includes('_site') || query.includes('home') || query.includes('allSocialProfiles')) {
-        const settings = await fetchLocal('/c/site-settings') || {};
+        if (!siteSettingsCache) {
+            siteSettingsCache = await fetchLocal('/c/site-settings') || {};
+        }
+        const settings = siteSettingsCache;
         data._site = {
             globalSeo: { siteName: settings.siteName || 'ФК Северный' },
             faviconMetaTags: settings.faviconMetaTags || [],
