@@ -257,83 +257,65 @@ app.get('/app/*', async (req, res) => {
     } catch (e2) {}
   }
 
-  // OG-теги для ботов (VK, Telegram, WhatsApp)
-  const botUa = (req.headers['user-agent'] || '').toLowerCase();
-  const isBot = botUa.includes('bot') || botUa.includes('crawler') || botUa.includes('spider')
-    || botUa.includes('vkshare') || botUa.includes('telegram') || botUa.includes('whatsapp')
-    || botUa.includes('facebookexternalhit') || botUa.includes('twitterbot');
+  // SEO meta + OG-теги для всех запросов /app/*
+  try {
+    const html = fs.readFileSync(appHtmlPath, 'utf-8');
+    let title = 'GameChallenge — Прогнозы на матчи КФЛ';
+    let description = 'Делай прогнозы на матчи Калужской футбольной лиги и соревнуйся с друзьями в рейтинге!';
 
-  if (isBot && req.path.includes('/page/') && req.query.id) {
-    try {
-      // Определяем pageId из пути: /app/page/team → team, /app/page/game → game
-      const pathParts = req.path.split('/');
-      const pageId = pathParts[pathParts.length - 1] || pathParts[pathParts.length - 2];
-
+    // Динамические страницы: /app/page/team?id=N или /app/p/team?id=N
+    const pageMatch = req.path.match(/\/app\/(?:page|p)\/(\w+)/);
+    if (pageMatch && req.query.id) {
+      const pageId = pageMatch[1];
       const descriptions = {
-        team: 'Статистика, форма, расписание матчей и прогнозы. Соревнуйся с друзьями!',
+        team: 'Статистика, форма, расписание матчей и результаты.',
         game: 'Сделай прогноз на матч и соревнуйся с друзьями в рейтинге!',
+        privacy: 'Политика конфиденциальности приложения GameChallenge.',
+        terms: 'Пользовательское соглашение приложения GameChallenge.',
       };
 
-      // Запрашиваем данные страницы для получения title
-      const apiHttp = require('https');
-      const pageData = await new Promise((resolve) => {
-        const postData = JSON.stringify({ pageId, id: req.query.id });
-        const options = {
-          hostname: 'api.fc-sever.ru',
-          port: 83,
-          path: '/api/page',
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
-          rejectUnauthorized: false,
-          timeout: 5000,
-        };
-        const r = apiHttp.request(options, (resp) => {
-          let data = '';
-          resp.on('data', c => data += c);
-          resp.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(null); } });
+      // Запрашиваем title команды/игры из API
+      try {
+        const apiHttp = require('https');
+        const pageData = await new Promise((resolve) => {
+          const postData = JSON.stringify({ pageId, id: req.query.id });
+          const options = {
+            hostname: 'api.fc-sever.ru', port: 83, path: '/api/page', method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
+            rejectUnauthorized: false, timeout: 5000,
+          };
+          const r = apiHttp.request(options, (resp) => {
+            let data = '';
+            resp.on('data', c => data += c);
+            resp.on('end', () => { try { resolve(JSON.parse(data)); } catch { resolve(null); } });
+          });
+          r.on('error', () => resolve(null));
+          r.on('timeout', () => { r.destroy(); resolve(null); });
+          r.write(postData);
+          r.end();
         });
-        r.on('error', () => resolve(null));
-        r.on('timeout', () => { r.destroy(); resolve(null); });
-        r.write(postData);
-        r.end();
-      });
+        const pageTitle = pageData?.result?.header?.headerLeft?.props?.title;
+        if (pageTitle) title = pageTitle + ' — GameChallenge';
+      } catch (e) {}
 
-      const title = pageData?.result?.header?.headerLeft?.props?.title || 'GameChallenge';
-      const description = descriptions[pageId] || 'Прогнозируй матчи КФЛ и соревнуйся с друзьями!';
+      description = descriptions[pageId] || description;
+    }
 
-      const html = fs.readFileSync(appHtmlPath, 'utf-8');
-      const ogTags = `
-        <meta property="og:title" content="${title} — GameChallenge" />
-        <meta property="og:description" content="${description}" />
-        <meta property="og:url" content="https://fc-sever.ru${req.originalUrl}" />
-        <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="GameChallenge" />
-      `;
-      const modifiedHtml = html.replace('</head>', ogTags + '</head>');
-      res.send(modifiedHtml);
-      return;
-    } catch (e) {}
+    const metaTags = `
+      <title>${title}</title>
+      <meta name="description" content="${description}" />
+      <meta property="og:title" content="${title}" />
+      <meta property="og:description" content="${description}" />
+      <meta property="og:url" content="https://fc-sever.ru${req.originalUrl}" />
+      <meta property="og:type" content="website" />
+      <meta property="og:site_name" content="GameChallenge" />
+      <link rel="canonical" href="https://fc-sever.ru${req.path}" />
+    `;
+    const modifiedHtml = html.replace('</head>', metaTags + '</head>');
+    res.send(modifiedHtml);
+  } catch (e) {
+    res.sendFile(appHtmlPath);
   }
-
-  // OG-теги для остальных /app/* (общие)
-  if (isBot) {
-    try {
-      const html = fs.readFileSync(appHtmlPath, 'utf-8');
-      const ogTags = `
-        <meta property="og:title" content="GameChallenge — Прогнозы на матчи КФЛ" />
-        <meta property="og:description" content="Делай прогнозы на матчи Калужской футбольной лиги и соревнуйся с друзьями в рейтинге!" />
-        <meta property="og:url" content="https://fc-sever.ru${req.originalUrl}" />
-        <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="GameChallenge" />
-      `;
-      const modifiedHtml = html.replace('</head>', ogTags + '</head>');
-      res.send(modifiedHtml);
-      return;
-    } catch (e) {}
-  }
-
-  // Обычный запрос — отдаём SPA
-  res.sendFile(appHtmlPath);
 });
 
 // Other paths, check whether to show page or 404(not found) page
