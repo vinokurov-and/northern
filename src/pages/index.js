@@ -174,7 +174,7 @@ export const getStaticProps = async (data) => {
   })
 
   // Обработка данных и передача их компоненту
-  return { props: { data: response.data, works: [...(news.reverse() || []), ...response2.data.allWorks], games, players: [...jsonPlayersDb] } }
+  return { props: { data: response.data, works: [...(news || []), ...response2.data.allWorks], games, players: [...jsonPlayersDb] } }
 
 }
 
