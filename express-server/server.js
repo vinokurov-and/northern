@@ -64,7 +64,7 @@ app.get('/c/news', async (req, res) => {
     // VK новости были импортированы через wall.get (новые VK → старые),
     // insertion order совпадает с id, значит ORDER BY id ASC выдаёт новые VK сверху.
     // Если в будущем добавить колонку date — сортировать по ней DESC.
-    const result = await db.all("SELECT * FROM news ORDER BY id ASC");
+    const result = await db.all("SELECT * FROM news WHERE hide IS NULL OR hide = 0 ORDER BY id ASC");
     res.send({ ok: true, result });
     return;
   } catch (e) {
