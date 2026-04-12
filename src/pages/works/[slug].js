@@ -9,7 +9,9 @@ import { fetchData } from '../../utils/fetchData';
 import Head from "next/head";
 
 export default ({ data, game: gameData }) => {
-  const { work: game } = gameData;
+  const { work: game } = gameData || {};
+
+  if (!game) return <Layout data={data} disableSlider><p>Запись не найдена</p></Layout>;
 
   return (
     <>
@@ -219,14 +221,14 @@ export const getStaticProps = async ({ params }) => {
     } catch {
       news = [];
     }
-    game = { work: news.find(item => String(item.id) === String(params.slug)) };
+    const found = news.find(item => String(item.id) === String(params.slug));
+    game = { work: found || null };
   }
-
-  console.log(game);
 
   const responseBase = await client({ query: QUERY_BASE });
 
+  // JSON round-trip удаляет undefined-поля (Next.js не умеет их сериализовать)
   return {
-    props: { game, data: responseBase.data }
+    props: JSON.parse(JSON.stringify({ game, data: responseBase.data }))
   }
 }

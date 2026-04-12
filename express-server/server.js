@@ -44,7 +44,7 @@ const options = {
 
 const pathMap = new Set([
   '/news',
-  '/player',
+  '/players',
   '/game',
   '/stats',
   '/add'

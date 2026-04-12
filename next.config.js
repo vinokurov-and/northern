@@ -9,5 +9,8 @@ module.exports = {
         },
       ],
     },
-    output: 'export'
+    output: 'export',
+    experimental: {
+      scrollRestoration: true,
+    },
   }

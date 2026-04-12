@@ -1,8 +1,8 @@
 import React from "react";
 import Img from "next/image";
-import Layout from "../components/layout";
+import Layout from "../../components/layout";
 import Link from "next/link";
-import client from "../utils/datacms";
+import client from "../../utils/datacms";
 
 const PlayerPage = ({ data, player }) => {
   const players = player?.allPlayers || [];
