@@ -20,6 +20,7 @@ let db;
   try {
     await db.run(`CREATE TABLE IF NOT EXISTS cta_events (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      event_type TEXT NOT NULL DEFAULT 'click',
       cta_id TEXT NOT NULL,
       path TEXT,
       anon_id TEXT,
@@ -30,6 +31,7 @@ let db;
     )`);
     await db.run('CREATE INDEX IF NOT EXISTS idx_cta_events_created_at ON cta_events(created_at)');
     await db.run('CREATE INDEX IF NOT EXISTS idx_cta_events_cta_id ON cta_events(cta_id)');
+    await db.run('CREATE INDEX IF NOT EXISTS idx_cta_events_event_type ON cta_events(event_type)');
   } catch (e) {
     console.error('cta_events bootstrap failed:', e.message);
   }
@@ -264,6 +266,8 @@ const ALLOWED_CTA_IDS = new Set([
   'header_forecast_button',
 ]);
 
+const ALLOWED_EVENT_TYPES = new Set(['click', 'view']);
+
 const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // In-memory rate-limit по IP: 20 req / 60s. Подходит для одного инстанса
@@ -312,6 +316,9 @@ app.post('/c/cta-event', async (req, res) => {
     if (!ALLOWED_CTA_IDS.has(ctaId)) {
       return res.status(400).send({ ok: false, description: 'unknown cta_id' });
     }
+    const eventType = typeof body.event_type === 'string' && ALLOWED_EVENT_TYPES.has(body.event_type)
+      ? body.event_type
+      : 'click';
 
     const anonId = typeof body.anon_id === 'string' && UUID_V4_RE.test(body.anon_id)
       ? body.anon_id
@@ -321,8 +328,8 @@ app.post('/c/cta-event', async (req, res) => {
     const ua = clampStr(req.headers['user-agent'], 512);
 
     await db.run(
-      'INSERT INTO cta_events (cta_id, path, anon_id, user_agent, referer, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      ctaId, pathStr, anonId, ua, referer, hashIp(ip), new Date().toISOString()
+      'INSERT INTO cta_events (event_type, cta_id, path, anon_id, user_agent, referer, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      eventType, ctaId, pathStr, anonId, ua, referer, hashIp(ip), new Date().toISOString()
     );
 
     // Beacon игнорирует тело ответа, но возвращаем 204 чтобы не тратить

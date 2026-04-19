@@ -69,12 +69,17 @@ const sendEvent = (url, payload) => {
   }
 }
 
-export const trackCtaClick = (ctaId) => {
+const trackCtaEvent = (ctaId, eventType) => {
   if (!isBrowser()) return
   sendEvent('/c/cta-event', {
+    event_type: eventType,
     cta_id: ctaId,
     anon_id: getAnonId(),
     path: window.location.pathname + window.location.search,
     referer: document.referrer || null,
   })
 }
+
+export const trackCtaClick = (ctaId) => trackCtaEvent(ctaId, 'click')
+
+export const trackCtaView = (ctaId) => trackCtaEvent(ctaId, 'view')
