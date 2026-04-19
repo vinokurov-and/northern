@@ -20,6 +20,7 @@ import { LogoSvg } from "../../../../components/LogoSvg";
 import { AppBarRoot, RightContainer, SocialContainer, Title } from "./styles";
 import { TELEGRAM_URI, VK_URI } from "../../../../config/social";
 import { useMobile } from '../../../../hooks/adaptive';
+import { trackCtaClick } from '../../../../utils/analytics';
 
 export const Header = () => {
   const s_0_600 = useMobile();
@@ -31,6 +32,7 @@ export const Header = () => {
   });
 
   const handleClick = () => {
+    trackCtaClick('header_forecast_button');
     document.location.href = '/app';
     setMobileMenuOpen(false);
   };

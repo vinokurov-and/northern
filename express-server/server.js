@@ -3,7 +3,8 @@ const path = require('path');
 const app = express()
 const fs = require('fs'),
   http = require('http'),
-  https = require('https');
+  https = require('https'),
+  crypto = require('crypto');
 // const bodyParser = require('body-parser');
 // const fileUpload = require('express-fileupload');
 const { openDb } = require('./db/Connect');
@@ -12,7 +13,26 @@ const multer = require('multer');
 let db;
 
 (async () => {
-  db = await openDb()
+  db = await openDb();
+  // Safety net: миграция 004 должна быть применена через `npm run migrate`,
+  // но если по какой-то причине этого не сделали — создаём таблицу лениво,
+  // чтобы /c/cta-event не падал 500 на проде.
+  try {
+    await db.run(`CREATE TABLE IF NOT EXISTS cta_events (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      cta_id TEXT NOT NULL,
+      path TEXT,
+      anon_id TEXT,
+      user_agent TEXT,
+      referer TEXT,
+      ip_hash TEXT,
+      created_at TEXT NOT NULL
+    )`);
+    await db.run('CREATE INDEX IF NOT EXISTS idx_cta_events_created_at ON cta_events(created_at)');
+    await db.run('CREATE INDEX IF NOT EXISTS idx_cta_events_cta_id ON cta_events(cta_id)');
+  } catch (e) {
+    console.error('cta_events bootstrap failed:', e.message);
+  }
 })();
 
 
@@ -51,6 +71,14 @@ const pathMap = new Set([
   '/analytics'
 ]);
 
+
+// trust proxy нужен чтобы req.ip корректно читался за reverse-proxy/CDN,
+// иначе rate-limit и ip_hash будут считаться по адресу прокси.
+app.set('trust proxy', true);
+
+// JSON body для /c/cta-event и /c/page-view. Небольшой лимит — нам
+// прилетают только короткие события, защищаемся от флуда.
+app.use('/c/cta-event', express.json({ limit: '2kb' }));
 
 app.use('/', express.static(path.join(__dirname, '..', 'out')));
 
@@ -224,6 +252,84 @@ app.get('/c/analytics', async (req, res) => {
     res.send({ ok: true, result: { total: total.count, today: today.count, topPages, recent } });
   } catch (e) {
     res.send({ ok: false, description: e.message });
+  }
+});
+
+// --- CTA event tracking ---
+//
+// Белый список допустимых cta_id. Расширяется по мере появления новых CTA.
+// Соглашение по именованию: <место>_<действие>_<объект>, ASCII, без слов
+// про деньги/ставки.
+const ALLOWED_CTA_IDS = new Set([
+  'header_forecast_button',
+]);
+
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+// In-memory rate-limit по IP: 20 req / 60s. Подходит для одного инстанса
+// express-сервера (screen-сессия `server`). Если появится балансер/несколько
+// реплик — переводим на БД или Redis.
+const CTA_RATE_WINDOW_MS = 60 * 1000;
+const CTA_RATE_MAX = 20;
+const ctaRateBuckets = new Map();
+
+const ctaRateLimited = (ip) => {
+  const now = Date.now();
+  const bucket = ctaRateBuckets.get(ip);
+  if (!bucket || now - bucket.windowStart > CTA_RATE_WINDOW_MS) {
+    ctaRateBuckets.set(ip, { windowStart: now, count: 1 });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > CTA_RATE_MAX;
+};
+
+// Периодическая чистка старых бакетов, чтобы Map не рос бесконечно.
+setInterval(() => {
+  const cutoff = Date.now() - CTA_RATE_WINDOW_MS;
+  for (const [ip, bucket] of ctaRateBuckets) {
+    if (bucket.windowStart < cutoff) ctaRateBuckets.delete(ip);
+  }
+}, 5 * 60 * 1000).unref();
+
+const hashIp = (ip) =>
+  crypto.createHash('sha256').update(String(ip || '')).digest('hex').slice(0, 16);
+
+const clampStr = (v, max) => {
+  if (typeof v !== 'string') return null;
+  return v.length > max ? v.slice(0, max) : v;
+};
+
+app.post('/c/cta-event', async (req, res) => {
+  try {
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    if (ctaRateLimited(ip)) {
+      return res.status(429).send({ ok: false, description: 'rate limited' });
+    }
+
+    const body = req.body || {};
+    const ctaId = typeof body.cta_id === 'string' ? body.cta_id : '';
+    if (!ALLOWED_CTA_IDS.has(ctaId)) {
+      return res.status(400).send({ ok: false, description: 'unknown cta_id' });
+    }
+
+    const anonId = typeof body.anon_id === 'string' && UUID_V4_RE.test(body.anon_id)
+      ? body.anon_id
+      : null;
+    const pathStr = clampStr(body.path, 512);
+    const referer = clampStr(body.referer ?? req.headers.referer, 512);
+    const ua = clampStr(req.headers['user-agent'], 512);
+
+    await db.run(
+      'INSERT INTO cta_events (cta_id, path, anon_id, user_agent, referer, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      ctaId, pathStr, anonId, ua, referer, hashIp(ip), new Date().toISOString()
+    );
+
+    // Beacon игнорирует тело ответа, но возвращаем 204 чтобы не тратить
+    // трафик — fetch keepalive fallback тоже корректно это обработает.
+    res.status(204).end();
+  } catch (e) {
+    res.status(500).send({ ok: false, description: e.message });
   }
 });
 
