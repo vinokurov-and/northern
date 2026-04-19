@@ -35,6 +35,22 @@ let db;
   } catch (e) {
     console.error('cta_events bootstrap failed:', e.message);
   }
+  try {
+    await db.run(`CREATE TABLE IF NOT EXISTS page_views_v2 (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      path TEXT NOT NULL,
+      anon_id TEXT,
+      user_agent TEXT,
+      referer TEXT,
+      ip_hash TEXT,
+      created_at TEXT NOT NULL
+    )`);
+    await db.run('CREATE INDEX IF NOT EXISTS idx_page_views_v2_created_at ON page_views_v2(created_at)');
+    await db.run('CREATE INDEX IF NOT EXISTS idx_page_views_v2_path ON page_views_v2(path)');
+    await db.run('CREATE INDEX IF NOT EXISTS idx_page_views_v2_anon_id ON page_views_v2(anon_id)');
+  } catch (e) {
+    console.error('page_views_v2 bootstrap failed:', e.message);
+  }
 })();
 
 
@@ -81,6 +97,7 @@ app.set('trust proxy', true);
 // JSON body для /c/cta-event и /c/page-view. Небольшой лимит — нам
 // прилетают только короткие события, защищаемся от флуда.
 app.use('/c/cta-event', express.json({ limit: '2kb' }));
+app.use('/c/page-view', express.json({ limit: '2kb' }));
 
 app.use('/', express.static(path.join(__dirname, '..', 'out')));
 
@@ -334,6 +351,76 @@ app.post('/c/cta-event', async (req, res) => {
 
     // Beacon игнорирует тело ответа, но возвращаем 204 чтобы не тратить
     // трафик — fetch keepalive fallback тоже корректно это обработает.
+    res.status(204).end();
+  } catch (e) {
+    res.status(500).send({ ok: false, description: e.message });
+  }
+});
+
+// --- Page view tracking ---
+//
+// Rate-limit 60/min на IP: страниц больше чем CTA, потолок выше.
+const PAGE_RATE_WINDOW_MS = 60 * 1000;
+const PAGE_RATE_MAX = 60;
+const pageRateBuckets = new Map();
+
+const pageRateLimited = (ip) => {
+  const now = Date.now();
+  const bucket = pageRateBuckets.get(ip);
+  if (!bucket || now - bucket.windowStart > PAGE_RATE_WINDOW_MS) {
+    pageRateBuckets.set(ip, { windowStart: now, count: 1 });
+    return false;
+  }
+  bucket.count += 1;
+  return bucket.count > PAGE_RATE_MAX;
+};
+
+setInterval(() => {
+  const cutoff = Date.now() - PAGE_RATE_WINDOW_MS;
+  for (const [ip, bucket] of pageRateBuckets) {
+    if (bucket.windowStart < cutoff) pageRateBuckets.delete(ip);
+  }
+}, 5 * 60 * 1000).unref();
+
+// Признаки краулеров в User-Agent: дропаем такие запросы до записи в БД,
+// чтобы аналитика отражала поведение реальных пользователей.
+const BOT_UA_RE = /bot|crawler|spider|crawling|yandex|googlebot|bingbot|duckduckbot|baidu|slurp|facebookexternalhit|twitterbot|telegrambot|vkshare|whatsapp|slackbot|linkedinbot|embedly|headlesschrome|phantomjs|selenium|puppeteer|playwright|curl|wget|python-requests/i;
+
+// Путь должен начинаться с «/», без схемы/хоста. Остальное отсекаем — защита
+// от подмены в теле запроса на полный URL или произвольную строку.
+const PATH_RE = /^\/[^\s]*$/;
+
+app.post('/c/page-view', async (req, res) => {
+  try {
+    const ip = req.ip || req.connection?.remoteAddress || '';
+    if (pageRateLimited(ip)) {
+      return res.status(429).send({ ok: false, description: 'rate limited' });
+    }
+
+    const ua = req.headers['user-agent'] || '';
+    if (BOT_UA_RE.test(ua)) {
+      // Молча принимаем и выходим: не ошибка для клиента, просто не пишем.
+      return res.status(204).end();
+    }
+
+    const body = req.body || {};
+    const rawPath = typeof body.path === 'string' ? body.path : '';
+    if (!rawPath || !PATH_RE.test(rawPath)) {
+      return res.status(400).send({ ok: false, description: 'invalid path' });
+    }
+    const pathStr = clampStr(rawPath, 512);
+
+    const anonId = typeof body.anon_id === 'string' && UUID_V4_RE.test(body.anon_id)
+      ? body.anon_id
+      : null;
+    const referer = clampStr(body.referer ?? req.headers.referer, 512);
+    const uaClamped = clampStr(ua, 512);
+
+    await db.run(
+      'INSERT INTO page_views_v2 (path, anon_id, user_agent, referer, ip_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      pathStr, anonId, uaClamped, referer, hashIp(ip), new Date().toISOString()
+    );
+
     res.status(204).end();
   } catch (e) {
     res.status(500).send({ ok: false, description: e.message });

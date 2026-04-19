@@ -83,3 +83,15 @@ const trackCtaEvent = (ctaId, eventType) => {
 export const trackCtaClick = (ctaId) => trackCtaEvent(ctaId, 'click')
 
 export const trackCtaView = (ctaId) => trackCtaEvent(ctaId, 'view')
+
+export const trackPageView = (pathOverride) => {
+  if (!isBrowser()) return
+  const path = typeof pathOverride === 'string' && pathOverride
+    ? pathOverride
+    : window.location.pathname + window.location.search
+  sendEvent('/c/page-view', {
+    path,
+    anon_id: getAnonId(),
+    referer: document.referrer || null,
+  })
+}
