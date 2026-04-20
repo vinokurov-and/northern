@@ -134,53 +134,24 @@ body: { ctaId: 'header-main', action: 'shown'|'click', page, sessionId, referer 
 
 Каждый дубликат — с отдельным `ctaId` в beacon, чтобы измерять вклад каждого места отдельно.
 
-### 2.3. Deep-link `/app/g-tournament?gameId=N` (параллельная работа в Total)
+### 2.3. KR2.3 — переформулирован в utm/source-трекинг
 
-Это задача programmer в Total-репозитории, не в northern. Задача KR2.3 из OKR Total:
+Исходная формулировка KR2.3 (передавать `gameId` с northern → Total, подсвечивать матч в `GuestGamesScreen`) **неработоспособна в текущем состоянии northern**: рабочих страниц матчей нет. `/games/[slug]` тянет DatoCMS-архив (сейчас мигрирован в SQLite-shim), контент туда не заливается; live-матчи главной показываются без своих URL (ссылка только на `kfl-football.ru`); `GamesAnnouncementScreen` остаётся закомментированным (решение фаундера). Передавать `gameId` неоткуда.
 
-1. `GuestGamesScreen` должен читать `gameId` из query-параметра.
-2. Если `gameId` есть — раскрыть нужный турнир, проскроллить к матчу, подсветить карточку.
-3. Если нет или невалидный — просто показать список.
-4. Событие `deep_link_landed {gameId, source=northern, found=true|false}` в `events` Total.
+**Новая формулировка KR2.3:** «Универсальный лендинг Total с трекингом источника. ≥60% переходов с northern доходят до первого `anon_forecast` или `tournament_view`; разрез по `source` работает в Total `events`.»
 
-Это нужно, чтобы **когда** на northern появятся контекстные CTA (привязанные к конкретному матчу), deep-link корректно доводил юзера до нужного места. Сейчас все CTA без `gameId` (редиректят на `/app`), но инфраструктуру ставим заранее — пригодится даже на этапе Шага 4 (дубликат под карточкой матча на `/games/[slug]`).
+**Что делаем в Total (маленький трек, ~1 день programmer):**
+1. `getCtaUrl()` в northern добавляет к `/app` query-параметры `?source=northern&utm_source=northern&utm_medium=cta&utm_campaign=<ctaId>` (где `ctaId` — `header-main`, `footer`, `player-card` и т.п. — из задачи #24).
+2. `GuestGamesScreen` в Total читает `source` и `utm_*` из query, пишет событие `deep_link_landed {source, utm_source, utm_medium, utm_campaign}` в `events`.
+3. Метрика `northernConversion7d` = `anon_forecast {source=northern} / deep_link_landed {source=northern}` (см. §5.2, просто без `gameId`).
 
-### 2.4. Что НЕ делаем в этом разделе
+**Что НЕ делаем:**
+- Маппинг `northern.gameId ↔ Total.games.id` — отложено до появления source-страниц матчей в northern.
+- Миграция `games.kflGameId` / `sourceMatchId` в Total — не нужна до появления source-страниц матчей.
+- Подсветка карточки конкретного матча — вернёмся, когда появятся source-страницы (Engine или новые лиги).
+- Раскомментировать `GamesAnnouncementScreen` — решение фаундера «нет».
 
-- **Новая инфраструктура для Engine-movka (CTA-компонент для страниц команд движка)** — не ближайший квартал. Когда (если) Engine будет разрабатываться — вернёмся.
-- **`games.kflGameId` / `sourceMatchId` миграция Total** — пока не нужна, все CTA редиректят на `/app` или `/app/g-tournament` без `gameId`. Мигрируем, когда будут контекстные CTA на страницах матча.
-- **Раскомментировать `GamesAnnouncementScreen`** — решение фаундера «нет».
-
----
-
-## 3. Deep-link `/app?gameId=N` (параллельный трек, закрывает KR2.3)
-
-### 3.1. Что сейчас
-
-- Существующий CTA редиректит на `/app` без `gameId`.
-- Маршрут `GUEST_TOURNAMENT_SCREEN = /app/g-tournament` уже есть в Total (`client/routers.ts`). `GuestGamesScreen` показывает список всех турниров.
-- **`gameId` из query не читается.** Контекстных CTA на страницах матча пока нет, значит острой нужды нет, но KR2.3 всё равно требуется закрыть.
-
-### 3.2. Что нужно на клиенте Total
-
-1. В `GuestGamesScreen` читать `gameId` из query (через `useLocalSearchParams` / `route.params`).
-2. Если `gameId` есть — раскрыть турнир, где этот матч; проскроллить; подсветить 600ms.
-3. Если нет/невалидный — обычный список + toast «Матч не найден».
-4. Трекать `deep_link_landed {gameId, source, found}` в `events`.
-
-Это готовит почву на случай, если Шаг 4 плана CTA (§2.2) потребует контекстных CTA с привязкой к конкретному матчу.
-
-### 3.3. Маппинг northern ↔ Total gameId — отложено
-
-Варианты (A/B/C/D — client-side matching, миграция `games.kflGameId` и т.д.) остаются в беклоге. Сейчас не выбираем, потому что **CTA без gameId работает уже сегодня** (редиректит на `/app`, юзер видит список турниров и выбирает матч сам). Возвращаемся к маппингу, если трекинг покажет, что «лишний шаг — найти матч в списке» существенно обрубает конверсию anon-forecast от landed.
-
-### 3.4. Pre-seeding `anonSessionId` на northern
-
-Идея: при открытии любой страницы northern уже генерировать `anonSessionId` UUIDv4 и класть в `localStorage['total_anonSessionId']` (shared origin). Когда юзер кликает CTA и Total стартует — читает тот же ключ. Плюс: activation-метрика Total получает первый touch-point раньше. Минус: privacy-шум (кладём ID без явного действия).
-
-**Решение:** пока не делаем. Приоритет — трекинг существующего CTA. Вернёмся, когда будут данные по воронке.
-
----
+**На будущее:** инфраструктура универсальная, чтение всех query-параметров. Когда (если) появятся source-страницы матчей — добавляем `&gameId=X` к существующему URL-конструктору без миграции клиента.
 
 ## 5. Воронка и метрики
 
@@ -321,4 +292,4 @@ body: { page, ctaId, action: 'shown' | 'click', sessionId, referer }
 Реально открытые:
 
 1. **Очерёдность с #21 и #23 в Total.** Этап 1 плана (трекинг CTA + KR2.3 в Total) — когда programmer сможет взять? Это ~4-6 дней суммарно в обеих репах.
-2. **Deep-link gameId (Вариант B/C/D из §3.3) — пока откладываем.** Подтвердить, что для первого раунда трекинга не нужно, возвращаемся по результату baseline.
+2. **Deep-link с `gameId` — откладываем до появления source-страниц матчей в northern** (см. §2.3). Для первого раунда трекинга достаточно `?source=northern&utm_*`.
