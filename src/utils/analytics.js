@@ -95,3 +95,19 @@ export const trackPageView = (pathOverride) => {
     referer: document.referrer || null,
   })
 }
+
+// Единая схема utm для ссылок из северного в Total:
+//   source       = 'northern'   (SEO-трафик северного как источник)
+//   utm_medium   = <ctaId>      (место клика, тот же whitelist, что в /c/cta-event)
+//   utm_campaign = 'northern_v1' (версионируем, чтобы позже отсекать старые когорты)
+// Новый CTA = добавить ctaId в whitelist сервера и передать в getCtaUrl.
+const UTM_CAMPAIGN = 'northern_v1'
+
+export const getCtaUrl = (ctaId) => {
+  const params = new URLSearchParams({
+    source: 'northern',
+    utm_medium: ctaId,
+    utm_campaign: UTM_CAMPAIGN,
+  })
+  return '/app?' + params.toString()
+}
