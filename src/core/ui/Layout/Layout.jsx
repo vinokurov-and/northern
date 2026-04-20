@@ -2,6 +2,7 @@ import React from "react";
 import { Slider } from "../Slider";
 import { Header } from "./Header";
 import { Main } from "./Main";
+import { Footer } from "./Footer";
 
 export const Layout = ({ children, disableSlider = false }) => {
   return (
@@ -12,6 +13,7 @@ export const Layout = ({ children, disableSlider = false }) => {
       <Main>
         {children}
       </Main>
+      <Footer />
     </>
   );
 };

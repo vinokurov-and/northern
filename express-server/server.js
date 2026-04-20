@@ -86,7 +86,9 @@ const pathMap = new Set([
   '/game',
   '/stats',
   '/add',
-  '/analytics'
+  '/analytics',
+  '/privacy',
+  '/terms'
 ]);
 
 
