@@ -283,6 +283,26 @@ const ALLOWED_CTA_IDS = new Set([
   'header_forecast_button',
 ]);
 
+// Гибрид: разрешаем целые семейства ad-<network>-* без перечисления каждого
+// конкретного места. Точка входа — whitelist проверенных сетей; внутри сети
+// добавление нового слота (home-footer → player-card → news-inline) не
+// требует деплоя сервера. Случайный «ad-othernetwork-xxx» с чужого сайта
+// отклоняется. Лимит длины и charset — защита от мусорных значений.
+const AD_CTA_ID_RE = /^ad-(admitad|adsterra)-[a-z0-9]+(-[a-z0-9]+)*$/;
+const AD_CTA_ID_MAX_LEN = 64;
+const matchesAdWhitelist = (ctaId) =>
+  typeof ctaId === 'string' &&
+  ctaId.length <= AD_CTA_ID_MAX_LEN &&
+  AD_CTA_ID_RE.test(ctaId);
+
+// Итоговая проверка: либо точное совпадение в ALLOWED_CTA_IDS (обычные CTA),
+// либо соответствие рекламному паттерну (слоты AdBlock'а).
+const isAllowedCtaId = (ctaId) =>
+  ALLOWED_CTA_IDS.has(ctaId) || matchesAdWhitelist(ctaId);
+
+// view/click покрывают оба сценария: обычный CTA (header_forecast_button,
+// click) и рекламный слот AdBlock (view на mount + click на делегированный
+// клик внутри обёртки).
 const ALLOWED_EVENT_TYPES = new Set(['click', 'view']);
 
 const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -330,7 +350,7 @@ app.post('/c/cta-event', async (req, res) => {
 
     const body = req.body || {};
     const ctaId = typeof body.cta_id === 'string' ? body.cta_id : '';
-    if (!ALLOWED_CTA_IDS.has(ctaId)) {
+    if (!isAllowedCtaId(ctaId)) {
       return res.status(400).send({ ok: false, description: 'unknown cta_id' });
     }
     const eventType = typeof body.event_type === 'string' && ALLOWED_EVENT_TYPES.has(body.event_type)

@@ -61,6 +61,8 @@ const IndexPage = (props) => {
         {/* <GamesAnnouncementScreen data={games} /> */}
         <News works={works || []} />
         <Players data={players} />
+        {/* TODO(#27): разместить AdBlock ad-admitad-home-footer после одобрения Admitad */}
+        {/* <AdBlock ctaId="ad-admitad-home-footer" erid="..." html="..." /> */}
       </>
     } data={data}></Layout>
   )

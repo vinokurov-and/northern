@@ -35,6 +35,8 @@ const PlayerSlug = ({ data, item, ...rest }) => {
             <Img width={200} height={200} style={{height: 'auto', width: 'auto'}} src={player.coverImage.url} />
           </div>
         )}
+        {/* TODO(#27): разместить AdBlock ad-admitad-player-card после одобрения Admitad */}
+        {/* <AdBlock ctaId="ad-admitad-player-card" erid="..." html="..." /> */}
       </div>
     </article>
   </Layout>

@@ -9,6 +9,9 @@ const DEFAULT_IMAGE = '/img/default-news.jpg';
 
 const NewsPage = (props) => {
   const { data, works } = props;
+  // TODO(#27): разместить AdBlock ad-admitad-news-inline между карточками
+  // (например, после первых 3 элементов works.map) после одобрения Admitad.
+  // Пример: { works.slice(0, 3) } <AdBlock ctaId="ad-admitad-news-inline" .. /> { works.slice(3) }
   return (
     <Layout data={data}>
       <div className="showcase">
