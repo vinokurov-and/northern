@@ -453,6 +453,146 @@ app.use('/', express.static(path.join(__dirname, '..', 'out')));
 
 app.use('/img', express.static(path.join(__dirname, '..', 'img')));
 
+// Внутренний вызов /api/match-summary/:id на Total-API (решение A9).
+// Таймаут 5s — Telegram/VK share-preview держит ~10s. Резолвится null при
+// 404/ошибке, SSR отдаёт generic OG (клиент сам покажет «не найден»).
+const fetchMatchSummary = (gameId) => new Promise((resolve) => {
+  const apiHttps = require('https');
+  const opts = {
+    hostname: 'api.fc-sever.ru', port: 83, path: `/api/match-summary/${gameId}`,
+    method: 'GET', rejectUnauthorized: false, timeout: 5000,
+    headers: { 'User-Agent': 'northern-ssr' },
+  };
+  const r = apiHttps.request(opts, (resp) => {
+    if (resp.statusCode !== 200) return resolve(null);
+    let data = '';
+    resp.on('data', (c) => data += c);
+    resp.on('end', () => {
+      try {
+        const j = JSON.parse(data);
+        resolve(j && j.ok ? j.result : null);
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+  r.on('error', () => resolve(null));
+  r.on('timeout', () => { r.destroy(); resolve(null); });
+  r.end();
+});
+
+const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
+  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+));
+
+const MONTHS_RU = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+const formatMatchDate = (unixSec) => {
+  if (!unixSec) return '';
+  const d = new Date(unixSec * 1000);
+  return `${d.getDate()} ${MONTHS_RU[d.getMonth()]}`;
+};
+
+const pickLeadingPercent = (forecast, home, guest) => {
+  const { home: h, guest: g, draw: d } = forecast;
+  if (h >= g && h >= d) return `${h}% ставят на победу ${home}`;
+  if (g >= h && g >= d) return `${g}% ставят на победу ${guest}`;
+  return `${d}% ждут ничьей`;
+};
+
+// JSON-LD SportsEvent — для upcoming и finished (решение A10, Schema.org).
+const buildMatchJsonLd = (m) => {
+  const statusMap = { upcoming: 'EventScheduled', live: 'EventInProgress', finished: 'EventCompleted' };
+  const json = {
+    '@context': 'https://schema.org',
+    '@type': 'SportsEvent',
+    name: `${m.home} vs ${m.guest}`,
+    sport: 'Football',
+    url: `https://fc-sever.ru/match/${m.gameId}`,
+    eventStatus: `https://schema.org/${statusMap[m.state] || 'EventScheduled'}`,
+    homeTeam: { '@type': 'SportsTeam', name: m.home },
+    awayTeam: { '@type': 'SportsTeam', name: m.guest },
+  };
+  if (m.datetime) json.startDate = new Date(m.datetime * 1000).toISOString();
+  if (m.state === 'finished' && m.homeScore != null && m.guestScore != null) {
+    json.homeTeamScore = m.homeScore;
+    json.awayTeamScore = m.guestScore;
+  }
+  if (m.tournament && m.tournament.name) {
+    json.superEvent = { '@type': 'SportsEvent', name: m.tournament.name };
+  }
+  return json;
+};
+
+// SSR-роут Tap-to-Predict (решения team-lead A1-A13). Один canonical URL
+// обслуживает все три состояния матча (A3, A10): upcoming/live/finished.
+// OG-image — статичный шаблон (A2), без рендеринга на лету.
+app.get('/match/:gameId', async (req, res) => {
+  const appHtmlPath = path.resolve(dir, '..', 'out', 'app/index.html');
+  const gameId = req.params.gameId;
+
+  if (!/^[1-9]\d*$/.test(gameId)) {
+    return res.redirect(302, '/app/list');
+  }
+
+  // Логируем SSR-запросы в ту же page_views что и /app/*.
+  try {
+    const url = req.originalUrl;
+    const referer = req.headers.referer || '';
+    const ua = req.headers['user-agent'] || '';
+    await db.run(
+      'INSERT INTO page_views (url, referer, user_agent, created_at) VALUES (?, ?, ?, ?)',
+      url, referer, ua, new Date().toISOString()
+    );
+  } catch {}
+
+  let html;
+  try {
+    html = fs.readFileSync(appHtmlPath, 'utf-8');
+  } catch {
+    return res.status(500).send('App shell missing');
+  }
+
+  const m = await fetchMatchSummary(gameId);
+  const canonicalUrl = `https://fc-sever.ru/match/${gameId}`;
+
+  let title, description, jsonLd = '';
+  if (!m) {
+    // 404 от API или таймаут — generic OG, шелл всё равно отдаём, клиент
+    // сам покажет «матч не найден» (MatchCardScreen fallback).
+    title = 'Прогноз на матч КФЛ — GameChallenge';
+    description = 'Сделай прогноз на матч Калужской футбольной лиги в один тап.';
+  } else {
+    const dateStr = formatMatchDate(m.datetime);
+    const dateTail = dateStr ? `, ${dateStr}` : '';
+    if (m.state === 'finished' && m.homeScore != null && m.guestScore != null) {
+      title = `${m.home} ${m.homeScore}:${m.guestScore} ${m.guest}${dateTail} — GameChallenge`;
+      description = `Матч ${m.home} — ${m.guest} завершён со счётом ${m.homeScore}:${m.guestScore}. Посмотри, кто угадал.`;
+    } else {
+      title = `${m.home} vs ${m.guest}${dateTail} — Прогноз на матч`;
+      const leadMsg = m.forecast && m.forecast.total >= 10
+        ? pickLeadingPercent(m.forecast, m.home, m.guest)
+        : 'Сделай прогноз за один тап';
+      description = `${leadMsg}. ${m.home} vs ${m.guest}${dateTail}.`;
+    }
+    jsonLd = `<script type="application/ld+json">${JSON.stringify(buildMatchJsonLd(m))}</script>`;
+  }
+
+  const metaTags = `
+    <title>${escapeHtml(title)}</title>
+    <meta name="description" content="${escapeHtml(description)}" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:url" content="${canonicalUrl}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="GameChallenge" />
+    <meta property="og:image" content="https://fc-sever.ru/img/og/match-default.png" />
+    <link rel="canonical" href="${canonicalUrl}" />
+    ${jsonLd}
+  `;
+
+  res.send(html.replace('</head>', metaTags + '</head>'));
+});
+
 // Аналитика кликов + OG-теги для /app/* роутов
 app.get('/app/*', async (req, res) => {
   const appHtmlPath = path.resolve(dir, '..', 'out', 'app/index.html');
