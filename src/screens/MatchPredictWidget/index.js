@@ -1,0 +1,1 @@
+export { MatchPredictWidget } from './MatchPredictWidget';

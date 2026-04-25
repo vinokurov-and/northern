@@ -4,6 +4,7 @@ import client from "../utils/datacms";
 import { parse } from 'node-html-parser';
 import { News } from "../screens/News";
 import { Players } from "../screens/Players";
+import { MatchPredictWidget } from "../screens/MatchPredictWidget";
 
 const QUERY = `
 {
@@ -59,6 +60,7 @@ const IndexPage = (props) => {
     <Layout beforeMainChildren={
       <>
         {/* <GamesAnnouncementScreen data={games} /> */}
+        <MatchPredictWidget />
         <News works={works || []} />
         <Players data={players} />
         {/* TODO(#27): разместить AdBlock ad-admitad-home-footer после одобрения Admitad */}
