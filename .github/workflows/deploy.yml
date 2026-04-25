@@ -131,6 +131,48 @@ jobs:
             screen -S server -X quit 2>/dev/null || true
             sleep 2
 
+            # Graceful cleanup существующего листенера на 443. Разрешаем kill
+            # ТОЛЬКО если владелец порта — наш процесс (cwd=/fcsever/express-server).
+            # Это не pkill по маске и не fuser по порту — хирургически точно
+            # по PID с проверкой ownership, безопасно на шареной инфре.
+            OLD_PID=\$(lsof -t -i:443 2>/dev/null | head -1)
+            if [ -n \"\$OLD_PID\" ]; then
+              OLD_CWD=\$(readlink -f /proc/\$OLD_PID/cwd 2>/dev/null || echo unknown)
+              OLD_CMD=\$(tr '\0' ' ' < /proc/\$OLD_PID/cmdline 2>/dev/null || echo unknown)
+              echo \"Existing listener on 443: pid=\$OLD_PID cwd=\$OLD_CWD cmd=\$OLD_CMD\"
+              if [ \"\$OLD_CWD\" = '/fcsever/express-server' ] && echo \"\$OLD_CMD\" | grep -q 'node.*server.js'; then
+                echo 'Owner confirmed (our orphan) — sending SIGTERM'
+                kill -TERM \$OLD_PID
+                for i in 1 2 3 4 5 6 7 8; do
+                  if ! kill -0 \$OLD_PID 2>/dev/null; then
+                    echo 'Orphan exited cleanly'
+                    break
+                  fi
+                  sleep 1
+                done
+                if kill -0 \$OLD_PID 2>/dev/null; then
+                  echo 'Orphan did not exit after SIGTERM — SIGKILL'
+                  kill -KILL \$OLD_PID
+                  sleep 2
+                fi
+              else
+                echo \"ERROR: port 443 owned by foreign process (cwd=\$OLD_CWD) — refusing to kill\"
+                exit 1
+              fi
+            else
+              echo 'No existing listener on 443'
+            fi
+
+            # Финальная гарантия: порт должен быть свободен.
+            for i in 1 2 3 4 5; do
+              if ! lsof -i:443 > /dev/null 2>&1; then break; fi
+              sleep 1
+            done
+            if lsof -i:443 > /dev/null 2>&1; then
+              echo 'ERROR: port 443 still busy — aborting'
+              exit 1
+            fi
+
             export NVM_DIR=/root/.nvm && source \$NVM_DIR/nvm.sh && nvm use 20
             cd /fcsever/express-server
 
