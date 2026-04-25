@@ -456,7 +456,7 @@ app.use('/img', express.static(path.join(__dirname, '..', 'img')));
 // Внутренний вызов /api/match-summary/:id на Total-API (решение A9).
 // Таймаут 5s — Telegram/VK share-preview держит ~10s. Резолвится null при
 // 404/ошибке, SSR отдаёт generic OG (клиент сам покажет «не найден»).
-const fetchMatchSummary = (gameId) => new Promise((resolve) => {
+const fetchMatchSummaryRaw = (gameId) => new Promise((resolve) => {
   const apiHttps = require('https');
   const opts = {
     hostname: 'api.fc-sever.ru', port: 83, path: `/api/match-summary/${gameId}`,
@@ -471,6 +471,63 @@ const fetchMatchSummary = (gameId) => new Promise((resolve) => {
       try {
         const j = JSON.parse(data);
         resolve(j && j.ok ? j.result : null);
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+  r.on('error', () => resolve(null));
+  r.on('timeout', () => { r.destroy(); resolve(null); });
+  r.end();
+});
+
+// Memory-cache для /api/match-summary (guardrail в ssr-match-pages.md §6:
+// SSR-страница для бота должна отдаваться < 1с p95). Парсер обновляет счета
+// раз в 6ч, 5 мин stale полностью безопасны. На total уже есть 60с
+// Cache-Control, но http-кеш в ноде без отдельной библиотеки не работает —
+// держим Map. Размер ограничен размером выборки sitemap (тыс. матчей);
+// чистим устаревшие записи при попадании.
+const MATCH_SUMMARY_TTL_MS = 5 * 60 * 1000;
+const matchSummaryCache = new Map();
+
+const fetchMatchSummary = async (gameId) => {
+  const key = String(gameId);
+  const cached = matchSummaryCache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.ts < MATCH_SUMMARY_TTL_MS) {
+    return cached.value;
+  }
+  const value = await fetchMatchSummaryRaw(gameId);
+  // Кешируем даже null — чтобы 404-флуд не бил по total. ttl тот же.
+  matchSummaryCache.set(key, { ts: now, value });
+  // Опpортунистически чистим протухшие записи если кеш разросся.
+  if (matchSummaryCache.size > 5000) {
+    for (const [k, v] of matchSummaryCache) {
+      if (now - v.ts >= MATCH_SUMMARY_TTL_MS) matchSummaryCache.delete(k);
+    }
+  }
+  return value;
+};
+
+// Получение списка id матчей для генерации /sitemap.xml. Cache 1ч в памяти.
+const SITEMAP_TTL_MS = 60 * 60 * 1000;
+let sitemapCache = { ts: 0, value: null };
+
+const fetchSitemapGames = () => new Promise((resolve) => {
+  const apiHttps = require('https');
+  const opts = {
+    hostname: 'api.fc-sever.ru', port: 83, path: '/api/sitemap-games',
+    method: 'GET', rejectUnauthorized: false, timeout: 10000,
+    headers: { 'User-Agent': 'northern-ssr' },
+  };
+  const r = apiHttps.request(opts, (resp) => {
+    if (resp.statusCode !== 200) return resolve(null);
+    let data = '';
+    resp.on('data', (c) => data += c);
+    resp.on('end', () => {
+      try {
+        const j = JSON.parse(data);
+        resolve(j && j.ok && Array.isArray(j.result) ? j.result : null);
       } catch {
         resolve(null);
       }
@@ -497,6 +554,62 @@ const pickLeadingPercent = (forecast, home, guest) => {
   if (h >= g && h >= d) return `${h}% ставят на победу ${home}`;
   if (g >= h && g >= d) return `${g}% ставят на победу ${guest}`;
   return `${d}% ждут ничьей`;
+};
+
+// SSR-тело для bot UA (US-1 в docs/prd/ssr-match-pages.md). Инжектится
+// в <div id="root">. Для людей React удалит этот HTML при первом рендере
+// (createRoot имеет seamless replace, без flash). Для ботов — единственный
+// текст, индексируется. Включает h1, абзац с датой/турниром/счётом, %
+// прогнозов и 2 кросс-линка на соседние матчи (US-4).
+const buildMatchSsrBody = (m) => {
+  if (!m) return '';
+  const dateStr = formatMatchDate(m.datetime);
+  const isFinished = m.state === 'finished' && m.homeScore != null && m.guestScore != null;
+  const score = isFinished ? `${m.homeScore}:${m.guestScore}` : '';
+
+  const headParts = [];
+  if (dateStr) headParts.push(escapeHtml(dateStr));
+  if (m.tournament && m.tournament.name) headParts.push(escapeHtml(m.tournament.name));
+  if (score) headParts.push(escapeHtml(score));
+  const headLine = headParts.length ? `<p>${headParts.join(' · ')}</p>` : '';
+
+  let forecastBlock = '';
+  if (m.forecast && m.forecast.total >= 1) {
+    const total = m.forecast.total;
+    const pct = (n) => Math.round((n / total) * 100);
+    const homePct = pct(m.forecast.home);
+    const guestPct = pct(m.forecast.guest);
+    const drawPct = pct(m.forecast.draw);
+    forecastBlock = `
+      <p>Прогнозы болельщиков:</p>
+      <ul>
+        <li>Победа ${escapeHtml(m.home)} — ${homePct}%</li>
+        <li>Победа ${escapeHtml(m.guest)} — ${guestPct}%</li>
+        <li>Ничья — ${drawPct}%</li>
+      </ul>`;
+  }
+
+  let linksBlock = '';
+  if (Array.isArray(m.siblings) && m.siblings.length > 0) {
+    const items = m.siblings.map((s) => {
+      const sDate = formatMatchDate(s.datetime);
+      const tail = sDate ? ` (${escapeHtml(sDate)})` : '';
+      return `<li><a href="/match/${s.gameId}">${escapeHtml(s.home)} — ${escapeHtml(s.guest)}</a>${tail}</li>`;
+    }).join('');
+    const tournamentLabel = m.tournament && m.tournament.name
+      ? `Другие матчи: ${escapeHtml(m.tournament.name)}`
+      : 'Другие матчи турнира';
+    linksBlock = `
+      <h2>${tournamentLabel}</h2>
+      <ul>${items}</ul>`;
+  }
+
+  return `
+    <h1>${escapeHtml(m.home)} — ${escapeHtml(m.guest)}</h1>
+    ${headLine}
+    ${forecastBlock}
+    ${linksBlock}
+  `;
 };
 
 // JSON-LD SportsEvent — для upcoming и finished (решение A10, Schema.org).
@@ -590,7 +703,66 @@ app.get('/match/:gameId', async (req, res) => {
     ${jsonLd}
   `;
 
-  res.send(html.replace('</head>', metaTags + '</head>'));
+  // SSR body только для ботов (US-1, US-2 в ssr-match-pages.md). Для людей
+  // SPA-shell как сейчас — никаких regressions. Bot UA-regex переиспользуем
+  // тот же что и для page-views (BOT_UA_RE).
+  let body = html.replace('</head>', metaTags + '</head>');
+  const ua = req.headers['user-agent'] || '';
+  if (m && BOT_UA_RE.test(ua)) {
+    const ssrBody = buildMatchSsrBody(m);
+    // <div id="root"></div> создаётся React Native Web в out/app/index.html.
+    // Если в будущем структура поменяется — делаем no-op.
+    body = body.replace(
+      /<div id="root"><\/div>/,
+      `<div id="root">${ssrBody}</div>`,
+    );
+  }
+  res.send(body);
+});
+
+// Sitemap для SEO (US-3 в ssr-match-pages.md). Cache 1ч в памяти, под
+// неудачу total-API отдаём 503 (не stale 404 — пусть Yandex повторит).
+app.get('/sitemap.xml', async (req, res) => {
+  const now = Date.now();
+  let games = sitemapCache.value;
+  if (!games || now - sitemapCache.ts >= SITEMAP_TTL_MS) {
+    games = await fetchSitemapGames();
+    if (games) sitemapCache = { ts: now, value: games };
+  }
+  if (!games) {
+    return res.status(503).type('text/plain').send('sitemap unavailable');
+  }
+  // Только матчи с datetime — без даты <lastmod> бесполезен и Yandex чаще
+  // ругается. Лимит 50000 URL на файл — пока не приближаемся, но обрезаем
+  // на всякий.
+  const dated = games.filter((g) => g && g.datetime).slice(0, 50000);
+  const urls = dated.map((g) => {
+    const lastmod = new Date(g.datetime * 1000).toISOString().slice(0, 10);
+    return `  <url><loc>https://fc-sever.ru/match/${g.id}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq></url>`;
+  }).join('\n');
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://fc-sever.ru/</loc><changefreq>daily</changefreq></url>
+  <url><loc>https://fc-sever.ru/app/list</loc><changefreq>daily</changefreq></url>
+${urls}
+</urlset>`;
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.type('application/xml').send(xml);
+});
+
+// Robots — закрываем /api/, /app/admin/ от индексации; остальное разрешаем
+// явно (US-3, [NEEDS-APPROVAL] #6 в ssr-match-pages.md).
+app.get('/robots.txt', (req, res) => {
+  const robots = `User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /app/admin/
+Disallow: /c/
+
+Sitemap: https://fc-sever.ru/sitemap.xml
+`;
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.type('text/plain').send(robots);
 });
 
 // Аналитика кликов + OG-теги для /app/* роутов
