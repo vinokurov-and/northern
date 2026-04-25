@@ -505,7 +505,7 @@ const buildMatchJsonLd = (m) => {
   const json = {
     '@context': 'https://schema.org',
     '@type': 'SportsEvent',
-    name: `${m.home} vs ${m.guest}`,
+    name: `${m.home} — ${m.guest}`,
     sport: 'Football',
     url: `https://fc-sever.ru/match/${m.gameId}`,
     eventStatus: `https://schema.org/${statusMap[m.state] || 'EventScheduled'}`,
@@ -568,11 +568,11 @@ app.get('/match/:gameId', async (req, res) => {
       title = `${m.home} ${m.homeScore}:${m.guestScore} ${m.guest}${dateTail} — GameChallenge`;
       description = `Матч ${m.home} — ${m.guest} завершён со счётом ${m.homeScore}:${m.guestScore}. Посмотри, кто угадал.`;
     } else {
-      title = `${m.home} vs ${m.guest}${dateTail} — Прогноз на матч`;
+      title = `${m.home} — ${m.guest}${dateTail} — Прогноз на матч`;
       const leadMsg = m.forecast && m.forecast.total >= 10
         ? pickLeadingPercent(m.forecast, m.home, m.guest)
         : 'Сделай прогноз за один тап';
-      description = `${leadMsg}. ${m.home} vs ${m.guest}${dateTail}.`;
+      description = `${leadMsg}. ${m.home} — ${m.guest}${dateTail}.`;
     }
     jsonLd = `<script type="application/ld+json">${JSON.stringify(buildMatchJsonLd(m))}</script>`;
   }
