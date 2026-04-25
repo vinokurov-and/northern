@@ -135,7 +135,7 @@ jobs:
             # ТОЛЬКО если владелец порта — наш процесс (cwd=/fcsever/express-server).
             # Это не pkill по маске и не fuser по порту — хирургически точно
             # по PID с проверкой ownership, безопасно на шареной инфре.
-            OLD_PID=\$(lsof -t -i:443 2>/dev/null | head -1)
+            OLD_PID=\$(lsof -tiTCP:443 -sTCP:LISTEN 2>/dev/null | head -1)
             if [ -n \"\$OLD_PID\" ]; then
               OLD_CWD=\$(readlink -f /proc/\$OLD_PID/cwd 2>/dev/null || echo unknown)
               OLD_CMD=\$(tr '\0' ' ' < /proc/\$OLD_PID/cmdline 2>/dev/null || echo unknown)
@@ -165,10 +165,10 @@ jobs:
 
             # Финальная гарантия: порт должен быть свободен.
             for i in 1 2 3 4 5; do
-              if ! lsof -i:443 > /dev/null 2>&1; then break; fi
+              if ! lsof -iTCP:443 -sTCP:LISTEN > /dev/null 2>&1; then break; fi
               sleep 1
             done
-            if lsof -i:443 > /dev/null 2>&1; then
+            if lsof -iTCP:443 -sTCP:LISTEN > /dev/null 2>&1; then
               echo 'ERROR: port 443 still busy — aborting'
               exit 1
             fi
@@ -182,7 +182,7 @@ jobs:
             sleep 4
 
             # Health-check №1: порт слушается хоть кем-то.
-            if ! lsof -i:443 > /dev/null 2>&1; then
+            if ! lsof -iTCP:443 -sTCP:LISTEN > /dev/null 2>&1; then
               echo 'ERROR: Northern is not listening on port 443 after restart'
               tail -80 /fcsever/northern.log 2>/dev/null || true
               exit 1
@@ -190,7 +190,7 @@ jobs:
 
             # Health-check №2: процесс на 443 — именно наш, из /fcsever/express-server.
             # Если cwd другой, это orphan/старый слушатель — fail fast.
-            NEW_PID=\$(lsof -t -i:443 | head -1)
+            NEW_PID=\$(lsof -tiTCP:443 -sTCP:LISTEN | head -1)
             NEW_CWD=\$(readlink -f /proc/\$NEW_PID/cwd 2>/dev/null || echo 'unknown')
             echo \"Listener on 443: pid=\$NEW_PID cwd=\$NEW_CWD\"
             if [ \"\$NEW_CWD\" != '/fcsever/express-server' ]; then
