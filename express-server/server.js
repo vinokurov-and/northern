@@ -571,6 +571,9 @@ const buildMatchSsrBody = (m) => {
   if (dateStr) headParts.push(escapeHtml(dateStr));
   if (m.tournament && m.tournament.name) headParts.push(escapeHtml(m.tournament.name));
   if (score) headParts.push(escapeHtml(score));
+  // Live-state маркер для индексации (spec docs/superpowers/specs/2026-05-01-live-match-ux-design).
+  // Без эмодзи — текст лучше для ранжирования.
+  if (m.state === 'live' && !score) headParts.push('Матч идёт');
   const headLine = headParts.length ? `<p>${headParts.join(' · ')}</p>` : '';
 
   let forecastBlock = '';
