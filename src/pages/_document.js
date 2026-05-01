@@ -6,6 +6,7 @@ export default function Document() {
         <Html>
             <Head>
                 <meta name="yandex-verification" content="f7f1b9fa4e224a3e" />
+                <meta name="google-site-verification" content="W9OraKsF8yYm8r_nIMDAQUU-XTlRiXhvpb4ERSzABO4" />
             </Head>
             <body>
                 <Main />
