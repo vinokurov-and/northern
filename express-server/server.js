@@ -512,11 +512,12 @@ const fetchMatchSummary = async (gameId) => {
 // Получение списка id матчей для генерации /sitemap.xml. Cache 1ч в памяти.
 const SITEMAP_TTL_MS = 60 * 60 * 1000;
 let sitemapCache = { ts: 0, value: null };
+let sitemapTeamsCache = { ts: 0, value: null };
 
-const fetchSitemapGames = () => new Promise((resolve) => {
+const fetchTotalApi = (apiPath) => new Promise((resolve) => {
   const apiHttps = require('https');
   const opts = {
-    hostname: 'api.fc-sever.ru', port: 83, path: '/api/sitemap-games',
+    hostname: 'api.fc-sever.ru', port: 83, path: apiPath,
     method: 'GET', rejectUnauthorized: false, timeout: 10000,
     headers: { 'User-Agent': 'northern-ssr' },
   };
@@ -537,6 +538,54 @@ const fetchSitemapGames = () => new Promise((resolve) => {
   r.on('timeout', () => { r.destroy(); resolve(null); });
   r.end();
 });
+
+const fetchSitemapGames = () => fetchTotalApi('/api/sitemap-games');
+const fetchSitemapTeams = () => fetchTotalApi('/api/sitemap-teams');
+
+// /api/team/<slug> на total-API. Cache 5 мин в памяти. Возвращает null
+// при 404/ошибке/таймауте — SSR отдаёт generic 404 fallback.
+const TEAM_PAGE_TTL_MS = 5 * 60 * 1000;
+const teamPageCache = new Map();
+
+const fetchTeamPageRaw = (slug) => new Promise((resolve) => {
+  const apiHttps = require('https');
+  const opts = {
+    hostname: 'api.fc-sever.ru', port: 83, path: `/api/team/${encodeURIComponent(slug)}`,
+    method: 'GET', rejectUnauthorized: false, timeout: 5000,
+    headers: { 'User-Agent': 'northern-ssr' },
+  };
+  const r = apiHttps.request(opts, (resp) => {
+    if (resp.statusCode !== 200) return resolve(null);
+    let data = '';
+    resp.on('data', (c) => data += c);
+    resp.on('end', () => {
+      try {
+        const j = JSON.parse(data);
+        resolve(j && j.ok ? j.result : null);
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+  r.on('error', () => resolve(null));
+  r.on('timeout', () => { r.destroy(); resolve(null); });
+  r.end();
+});
+
+const fetchTeamPage = async (slug) => {
+  const key = String(slug);
+  const cached = teamPageCache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.ts < TEAM_PAGE_TTL_MS) return cached.value;
+  const value = await fetchTeamPageRaw(slug);
+  teamPageCache.set(key, { ts: now, value });
+  if (teamPageCache.size > 5000) {
+    for (const [k, v] of teamPageCache) {
+      if (now - v.ts >= TEAM_PAGE_TTL_MS) teamPageCache.delete(k);
+    }
+  }
+  return value;
+};
 
 const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => (
   { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
@@ -723,6 +772,134 @@ app.get('/match/:gameId', async (req, res) => {
   res.send(body);
 });
 
+// SSR-тело для bot UA на странице клуба (PRD docs/prd/club-pages.md).
+// Hero (название), 4 секции (расписание/результаты/состав/прогноз),
+// внутренние ссылки на матчи. Тон без слов «прогноз/ставка» в hero —
+// это сайт клуба, не букмекер (UI direction §10).
+const buildTeamSsrBody = (t) => {
+  if (!t) return '';
+  const parts = [];
+  parts.push(`<h1>${escapeHtml(t.title)}</h1>`);
+
+  const upcoming = Array.isArray(t.upcomingMatches) ? t.upcomingMatches : [];
+  if (upcoming.length > 0) {
+    parts.push('<h2>Ближайшие матчи</h2>');
+    const items = upcoming.map((m) => {
+      const date = formatMatchDate(m.datetime);
+      return `<li><a href="/match/${m.gameId}">${escapeHtml(m.home)} — ${escapeHtml(m.guest)}</a>${date ? ` (${escapeHtml(date)})` : ''}</li>`;
+    }).join('');
+    parts.push(`<ul>${items}</ul>`);
+  }
+
+  const past = Array.isArray(t.pastMatches) ? t.pastMatches : [];
+  if (past.length > 0) {
+    parts.push('<h2>Последние результаты</h2>');
+    const items = past.map((m) => {
+      const date = formatMatchDate(m.datetime);
+      const score = (m.homeScore != null && m.guestScore != null) ? ` ${m.homeScore}:${m.guestScore}` : '';
+      return `<li><a href="/match/${m.gameId}">${escapeHtml(m.home)} —${escapeHtml(score)} ${escapeHtml(m.guest)}</a>${date ? ` (${escapeHtml(date)})` : ''}</li>`;
+    }).join('');
+    parts.push(`<ul>${items}</ul>`);
+  }
+
+  if (Array.isArray(t.roster) && t.roster.length > 0) {
+    parts.push('<h2>Состав</h2>');
+    parts.push(`<ul>${t.roster.map((p) => `<li>${escapeHtml(p)}</li>`).join('')}</ul>`);
+  }
+
+  if (t.tournament && t.tournament.name) {
+    parts.push(`<p>Турнир: ${escapeHtml(t.tournament.name)}</p>`);
+  }
+
+  return parts.join('\n');
+};
+
+// JSON-LD SportsTeam — для индексации (Q1: addressRegion=Калужская область).
+const buildTeamJsonLd = (t) => {
+  const json = {
+    '@context': 'https://schema.org',
+    '@type': 'SportsTeam',
+    name: t.title,
+    sport: 'Football',
+    url: `https://fc-sever.ru/team/${t.slug}`,
+    location: {
+      '@type': 'Place',
+      address: { '@type': 'PostalAddress', addressRegion: 'Калужская область', addressCountry: 'RU' },
+    },
+  };
+  if (t.logo && t.logo.url) {
+    json.logo = `https://api.fc-sever.ru:83${t.logo.url}`;
+  }
+  return json;
+};
+
+// SSR-роут /team/:slug — клубные страницы, центр PRD club-pages.md.
+// Один canonical URL, generic OG image, JSON-LD SportsTeam. Hero без слов
+// «прогноз/ставка» (UI direction). Если slug не валиден или API 404 —
+// шелл всё равно отдаём, клиент сам покажет 404 fallback с 5 random teams.
+app.get('/team/:slug', async (req, res) => {
+  const appHtmlPath = path.resolve(dir, '..', 'out', 'app/index.html');
+  const slug = String(req.params.slug || '').toLowerCase();
+
+  if (!/^[a-z0-9-]{1,80}$/.test(slug)) {
+    return res.redirect(302, '/app/list');
+  }
+
+  try {
+    const url = req.originalUrl;
+    const referer = req.headers.referer || '';
+    const ua = req.headers['user-agent'] || '';
+    await db.run(
+      'INSERT INTO page_views (url, referer, user_agent, created_at) VALUES (?, ?, ?, ?)',
+      url, referer, ua, new Date().toISOString()
+    );
+  } catch {}
+
+  let html;
+  try {
+    html = fs.readFileSync(appHtmlPath, 'utf-8');
+  } catch {
+    return res.status(500).send('App shell missing');
+  }
+
+  const t = await fetchTeamPage(slug);
+  const canonicalUrl = `https://fc-sever.ru/team/${slug}`;
+
+  let title, description, jsonLd = '';
+  if (!t) {
+    title = 'Клуб не найден — fc-sever.ru';
+    description = 'Команда не найдена. Открой главную и выбери клуб из списка.';
+  } else {
+    title = `${t.title} — расписание и результаты — Калужская футбольная лига`;
+    description = `${t.title}: расписание ближайших матчей, последние результаты, прогнозы болельщиков.`;
+    jsonLd = `<script type="application/ld+json">${JSON.stringify(buildTeamJsonLd(t))}</script>`;
+  }
+
+  const metaTags = `
+    <title>${escapeHtml(title)}</title>
+    <meta name="description" content="${escapeHtml(description)}" />
+    <meta property="og:title" content="${escapeHtml(title)}" />
+    <meta property="og:description" content="${escapeHtml(description)}" />
+    <meta property="og:url" content="${canonicalUrl}" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="GameChallenge" />
+    <meta property="og:image" content="https://fc-sever.ru/img/og/match-default.png" />
+    <link rel="canonical" href="${canonicalUrl}" />
+    ${jsonLd}
+  `;
+
+  let body = html.replace('</head>', metaTags + '</head>');
+  const ua = req.headers['user-agent'] || '';
+  if (t && BOT_UA_RE.test(ua)) {
+    const ssrBody = buildTeamSsrBody(t);
+    body = body.replace(
+      /<div id="root"><\/div>/,
+      `<div id="root">${ssrBody}</div>`,
+    );
+  }
+  res.send(body);
+});
+
 // Sitemap для SEO (US-3 в ssr-match-pages.md). Cache 1ч в памяти, под
 // неудачу total-API отдаём 503 (не stale 404 — пусть Yandex повторит).
 app.get('/sitemap.xml', async (req, res) => {
@@ -732,22 +909,39 @@ app.get('/sitemap.xml', async (req, res) => {
     games = await fetchSitemapGames();
     if (games) sitemapCache = { ts: now, value: games };
   }
-  if (!games) {
+  let teams = sitemapTeamsCache.value;
+  if (!teams || now - sitemapTeamsCache.ts >= SITEMAP_TTL_MS) {
+    teams = await fetchSitemapTeams();
+    if (teams) sitemapTeamsCache = { ts: now, value: teams };
+  }
+  if (!games && !teams) {
     return res.status(503).type('text/plain').send('sitemap unavailable');
   }
-  // Только матчи с datetime — без даты <lastmod> бесполезен и Yandex чаще
-  // ругается. Лимит 50000 URL на файл — пока не приближаемся, но обрезаем
-  // на всякий.
-  const dated = games.filter((g) => g && g.datetime).slice(0, 50000);
-  const urls = dated.map((g) => {
+  const datedGames = (games || []).filter((g) => g && g.datetime).slice(0, 30000);
+  const gamesUrls = datedGames.map((g) => {
     const lastmod = new Date(g.datetime * 1000).toISOString().slice(0, 10);
     return `  <url><loc>https://fc-sever.ru/match/${g.id}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq></url>`;
   }).join('\n');
+
+  // Club pages: один URL на slug, lastmod = MAX(games.datetime) per team.
+  // Не теряем команды без upcoming-матчей (lastmod=null) — они индексируются
+  // как «вечно-зелёные» страницы клуба, без <lastmod>.
+  const teamsList = (teams || []).slice(0, 5000);
+  const teamsUrls = teamsList.map((t) => {
+    if (!t || !t.slug) return '';
+    if (t.lastmod) {
+      const lastmod = new Date(t.lastmod * 1000).toISOString().slice(0, 10);
+      return `  <url><loc>https://fc-sever.ru/team/${t.slug}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq></url>`;
+    }
+    return `  <url><loc>https://fc-sever.ru/team/${t.slug}</loc><changefreq>monthly</changefreq></url>`;
+  }).filter(Boolean).join('\n');
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://fc-sever.ru/</loc><changefreq>daily</changefreq></url>
   <url><loc>https://fc-sever.ru/app/list</loc><changefreq>daily</changefreq></url>
-${urls}
+${teamsUrls}
+${gamesUrls}
 </urlset>`;
   res.setHeader('Cache-Control', 'public, max-age=3600');
   res.type('application/xml').send(xml);
