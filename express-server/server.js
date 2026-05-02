@@ -9,6 +9,24 @@ const fs = require('fs'),
 // const fileUpload = require('express-fileupload');
 const { openDb } = require('./db/Connect');
 const multer = require('multer');
+const compression = require('compression');
+
+// Сжатие всех ответов (gzip/brotli по Accept-Encoding клиента). Существенно
+// уменьшает размер SSR-HTML карточек матча/клуба и /sitemap.xml — особенно
+// для бот-краулеров. Должно идти ПЕРВЫМ middleware, до static и роутов.
+app.use(compression());
+
+// Keep-alive HTTPS-агент для запросов на total-API (api.fc-sever.ru:83).
+// Без него каждый /match/:id и /team/:slug делает TLS-handshake (~150-300ms).
+// С keepAlive соединение переиспользуется между запросами в течение TTL.
+// rejectUnauthorized: false — total использует self-signed (Let's Encrypt
+// валиден, но порт 83 нестандартный, и так уже было в старом коде).
+const apiKeepAliveAgent = new https.Agent({
+  keepAlive: true,
+  keepAliveMsecs: 30000,
+  maxSockets: 10,
+  rejectUnauthorized: false,
+});
 
 let db;
 
@@ -460,7 +478,7 @@ const fetchMatchSummaryRaw = (gameId) => new Promise((resolve) => {
   const apiHttps = require('https');
   const opts = {
     hostname: 'api.fc-sever.ru', port: 83, path: `/api/match-summary/${gameId}`,
-    method: 'GET', rejectUnauthorized: false, timeout: 5000,
+    method: 'GET', timeout: 5000, agent: apiKeepAliveAgent,
     headers: { 'User-Agent': 'northern-ssr' },
   };
   const r = apiHttps.request(opts, (resp) => {
@@ -518,7 +536,7 @@ const fetchTotalApi = (apiPath) => new Promise((resolve) => {
   const apiHttps = require('https');
   const opts = {
     hostname: 'api.fc-sever.ru', port: 83, path: apiPath,
-    method: 'GET', rejectUnauthorized: false, timeout: 10000,
+    method: 'GET', timeout: 10000, agent: apiKeepAliveAgent,
     headers: { 'User-Agent': 'northern-ssr' },
   };
   const r = apiHttps.request(opts, (resp) => {
@@ -551,7 +569,7 @@ const fetchTeamPageRaw = (slug) => new Promise((resolve) => {
   const apiHttps = require('https');
   const opts = {
     hostname: 'api.fc-sever.ru', port: 83, path: `/api/team/${encodeURIComponent(slug)}`,
-    method: 'GET', rejectUnauthorized: false, timeout: 5000,
+    method: 'GET', timeout: 5000, agent: apiKeepAliveAgent,
     headers: { 'User-Agent': 'northern-ssr' },
   };
   const r = apiHttps.request(opts, (resp) => {
@@ -1013,7 +1031,7 @@ app.get('/app/*', async (req, res) => {
           const options = {
             hostname: 'api.fc-sever.ru', port: 83, path: '/api/page', method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(postData) },
-            rejectUnauthorized: false, timeout: 5000,
+            timeout: 5000, agent: apiKeepAliveAgent,
           };
           const r = apiHttp.request(options, (resp) => {
             let data = '';
