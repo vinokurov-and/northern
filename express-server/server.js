@@ -28,6 +28,22 @@ const apiKeepAliveAgent = new https.Agent({
   rejectUnauthorized: false,
 });
 
+// Verify meta-tags для Yandex Webmaster и Google Search Console. Токены
+// задаются через env (YANDEX_VERIFICATION / GOOGLE_VERIFICATION). Без env
+// возвращается пустая строка — meta не выводится. Helper встраивается во все
+// SSR-страницы (/match/:id, /team/:slug, /teams) — Webmaster проверяет
+// верификацию на главной по умолчанию, но любой URL подтянется.
+const buildVerificationMeta = () => {
+  const parts = [];
+  if (process.env.YANDEX_VERIFICATION) {
+    parts.push(`<meta name="yandex-verification" content="${process.env.YANDEX_VERIFICATION}">`);
+  }
+  if (process.env.GOOGLE_VERIFICATION) {
+    parts.push(`<meta name="google-site-verification" content="${process.env.GOOGLE_VERIFICATION}">`);
+  }
+  return parts.join('\n    ');
+};
+
 let db;
 
 (async () => {
@@ -559,6 +575,7 @@ const fetchTotalApi = (apiPath) => new Promise((resolve) => {
 
 const fetchSitemapGames = () => fetchTotalApi('/api/sitemap-games');
 const fetchSitemapTeams = () => fetchTotalApi('/api/sitemap-teams');
+const fetchTeamsIndex = () => fetchTotalApi('/api/teams-index');
 
 // /api/team/<slug> на total-API. Cache 5 мин в памяти. Возвращает null
 // при 404/ошибке/таймауте — SSR отдаёт generic 404 fallback.
@@ -770,6 +787,7 @@ app.get('/match/:gameId', async (req, res) => {
     <meta property="og:site_name" content="GameChallenge" />
     <meta property="og:image" content="https://fc-sever.ru/img/og/match-default.png" />
     <link rel="canonical" href="${canonicalUrl}" />
+    ${buildVerificationMeta()}
     ${jsonLd}
   `;
 
@@ -903,6 +921,7 @@ app.get('/team/:slug', async (req, res) => {
     <meta property="og:site_name" content="GameChallenge" />
     <meta property="og:image" content="https://fc-sever.ru/img/og/match-default.png" />
     <link rel="canonical" href="${canonicalUrl}" />
+    ${buildVerificationMeta()}
     ${jsonLd}
   `;
 
@@ -916,6 +935,98 @@ app.get('/team/:slug', async (req, res) => {
     );
   }
   res.send(body);
+});
+
+// /teams — публичный индекс клубов. Discovery layer: для гостя/капитана это
+// единственный entry-point из главной (без него /team/<slug> доступен только
+// по прямой ссылке или поиску, который пока не индексирован). Cache 5 мин
+// в памяти. Для бот-индексации SSR-список ссылок прямо в body.
+const TEAMS_INDEX_TTL_MS = 5 * 60 * 1000;
+let teamsIndexCache = { ts: 0, value: null };
+
+const fetchTeamsIndexCached = async () => {
+  const now = Date.now();
+  if (teamsIndexCache.value && now - teamsIndexCache.ts < TEAMS_INDEX_TTL_MS) {
+    return teamsIndexCache.value;
+  }
+  const value = await fetchTeamsIndex();
+  if (value) teamsIndexCache = { ts: now, value };
+  return value;
+};
+
+app.get('/teams', async (req, res) => {
+  const teams = await fetchTeamsIndexCached();
+
+  if (!teams) {
+    return res.status(503).type('text/plain').send('Service unavailable, try again later');
+  }
+
+  // Группировка по последнему турниру для удобства просмотра. Команды без
+  // турнира идут отдельной группой «Архив». Сортировка внутри группы по
+  // алфавиту.
+  const grouped = new Map();
+  for (const t of teams) {
+    if (!t || !t.slug) continue;
+    const key = t.lastTournament || 'Архив';
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(t);
+  }
+  const groups = Array.from(grouped.entries())
+    .map(([name, list]) => ({ name, list: list.sort((a, b) => a.title.localeCompare(b.title, 'ru')) }))
+    .sort((a, b) => {
+      if (a.name === 'Архив') return 1;
+      if (b.name === 'Архив') return -1;
+      return a.name.localeCompare(b.name, 'ru');
+    });
+
+  const groupsHtml = groups.map((g) => `
+    <section class="group">
+      <h2>${escapeHtml(g.name)}</h2>
+      <ul class="teams-list">
+        ${g.list.map((t) => `<li><a href="/team/${escapeHtml(t.slug)}">${escapeHtml(t.title)}</a></li>`).join('\n')}
+      </ul>
+    </section>
+  `).join('\n');
+
+  const total = teams.length;
+  const html = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Все команды Калужской футбольной лиги — fc-sever.ru</title>
+  <meta name="description" content="Полный список ${total} футбольных клубов Калужской области: расписание, результаты, турнирные таблицы.">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta property="og:title" content="Все команды Калужской футбольной лиги">
+  <meta property="og:description" content="Полный список ${total} клубов: расписание, результаты, прогнозы.">
+  <meta property="og:url" content="https://fc-sever.ru/teams">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://fc-sever.ru/teams">
+  ${buildVerificationMeta()}
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 960px; margin: 0 auto; padding: 24px 16px; color: #1F2937; background: #F5F7F5; }
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    .lead { color: #6B7280; margin-bottom: 24px; font-size: 14px; }
+    .group { background: #FFFFFF; border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
+    .group h2 { font-size: 16px; margin: 0 0 12px; color: #30463B; }
+    .teams-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+    .teams-list a { color: #1F2937; text-decoration: none; padding: 6px 0; display: block; border-bottom: 1px solid transparent; }
+    .teams-list a:hover { color: #30463B; border-bottom-color: #30463B; }
+    footer { margin-top: 24px; text-align: center; color: #9CA3AF; font-size: 12px; }
+    footer a { color: #30463B; text-decoration: none; }
+  </style>
+</head>
+<body>
+  <h1>Команды</h1>
+  <p class="lead">${total} клубов Калужской области с актуальным расписанием.</p>
+  ${groupsHtml}
+  <footer>
+    <a href="/">На главную</a> · <a href="/sitemap.xml">sitemap</a>
+  </footer>
+</body>
+</html>`;
+
+  res.setHeader('Cache-Control', 'public, max-age=300');
+  res.type('text/html; charset=utf-8').send(html);
 });
 
 // Sitemap для SEO (US-3 в ssr-match-pages.md). Cache 1ч в памяти, под
@@ -957,6 +1068,7 @@ app.get('/sitemap.xml', async (req, res) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://fc-sever.ru/</loc><changefreq>daily</changefreq></url>
+  <url><loc>https://fc-sever.ru/teams</loc><changefreq>daily</changefreq></url>
   <url><loc>https://fc-sever.ru/app/list</loc><changefreq>daily</changefreq></url>
 ${teamsUrls}
 ${gamesUrls}
@@ -1059,6 +1171,7 @@ app.get('/app/*', async (req, res) => {
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content="GameChallenge" />
       <link rel="canonical" href="https://fc-sever.ru${req.path}" />
+      ${buildVerificationMeta()}
     `;
     const modifiedHtml = html.replace('</head>', metaTags + '</head>');
     res.send(modifiedHtml);
