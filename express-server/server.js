@@ -1,3 +1,8 @@
+// .env подгружаем первым — чтобы process.env был доступен в helpers ниже.
+// Файл .env лежит в /fcsever/express-server/.env на проде (не в репо,
+// в .gitignore). Содержит YANDEX_VERIFICATION, GOOGLE_VERIFICATION и др.
+try { require('dotenv').config(); } catch (e) { /* dotenv optional */ }
+
 const express = require('express')
 const path = require('path');
 const app = express()
