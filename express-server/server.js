@@ -582,6 +582,7 @@ const fetchMatchSummary = async (gameId) => {
 const SITEMAP_TTL_MS = 60 * 60 * 1000;
 let sitemapCache = { ts: 0, value: null };
 let sitemapTeamsCache = { ts: 0, value: null };
+let sitemapPlayersCache = { ts: 0, value: null };
 
 const fetchTotalApi = (apiPath) => new Promise((resolve) => {
   const apiHttps = require('https');
@@ -610,6 +611,7 @@ const fetchTotalApi = (apiPath) => new Promise((resolve) => {
 
 const fetchSitemapGames = () => fetchTotalApi('/api/sitemap-games');
 const fetchSitemapTeams = () => fetchTotalApi('/api/sitemap-teams');
+const fetchSitemapPlayers = () => fetchTotalApi('/api/sitemap-players');
 const fetchTeamsIndex = () => fetchTotalApi('/api/teams-index');
 
 // /api/player/<slug> на total-API для SSR /player/<slug>. Cache 5 мин.
@@ -916,7 +918,14 @@ const buildTeamSsrBody = (t) => {
 
   if (Array.isArray(t.roster) && t.roster.length > 0) {
     parts.push('<h2>Состав</h2>');
-    parts.push(`<ul>${t.roster.map((p) => `<li>${escapeHtml(p)}</li>`).join('')}</ul>`);
+    parts.push(`<ul>${t.roster.map((p) => {
+      const name = typeof p === 'string' ? p : (p && p.username) || '';
+      const slug = typeof p === 'object' && p ? p.publicSlug : null;
+      const inner = escapeHtml(name);
+      return slug
+        ? `<li><a href="/player/${escapeHtml(slug)}">${inner}</a></li>`
+        : `<li>${inner}</li>`;
+    }).join('')}</ul>`);
   }
 
   if (t.tournament && t.tournament.name) {
@@ -1167,6 +1176,11 @@ app.get('/sitemap.xml', async (req, res) => {
     teams = await fetchSitemapTeams();
     if (teams) sitemapTeamsCache = { ts: now, value: teams };
   }
+  let players = sitemapPlayersCache.value;
+  if (!players || now - sitemapPlayersCache.ts >= SITEMAP_TTL_MS) {
+    players = await fetchSitemapPlayers();
+    if (players) sitemapPlayersCache = { ts: now, value: players };
+  }
   if (!games && !teams) {
     return res.status(503).type('text/plain').send('sitemap unavailable');
   }
@@ -1189,12 +1203,23 @@ app.get('/sitemap.xml', async (req, res) => {
     return `  <url><loc>https://fc-sever.ru/team/${t.slug}</loc><changefreq>monthly</changefreq></url>`;
   }).filter(Boolean).join('\n');
 
+  const playersList = (players || []).slice(0, 5000);
+  const playersUrls = playersList.map((p) => {
+    if (!p || !p.slug) return '';
+    if (p.lastmod) {
+      const lastmod = new Date(p.lastmod * 1000).toISOString().slice(0, 10);
+      return `  <url><loc>https://fc-sever.ru/player/${p.slug}</loc><lastmod>${lastmod}</lastmod><changefreq>weekly</changefreq></url>`;
+    }
+    return `  <url><loc>https://fc-sever.ru/player/${p.slug}</loc><changefreq>monthly</changefreq></url>`;
+  }).filter(Boolean).join('\n');
+
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://fc-sever.ru/</loc><changefreq>daily</changefreq></url>
   <url><loc>https://fc-sever.ru/teams</loc><changefreq>daily</changefreq></url>
   <url><loc>https://fc-sever.ru/app/list</loc><changefreq>daily</changefreq></url>
 ${teamsUrls}
+${playersUrls}
 ${gamesUrls}
 </urlset>`;
   res.setHeader('Cache-Control', 'public, max-age=3600');
