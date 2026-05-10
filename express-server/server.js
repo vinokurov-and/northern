@@ -134,6 +134,35 @@ app.get('/og/tournament/:slug.png', async (req, res) => {
   res.type('image/png').send(buf);
 });
 
+// JSON-LD BreadcrumbList — повышает CTR в SERP (Google/Yandex показывают
+// `fc-sever.ru › Команды › ФК Темп` вместо голого URL).
+// items: [{name, url}] — последний элемент опционально без url (current page).
+const buildBreadcrumbJsonLd = (items) => {
+  const listItems = items.map((it, i) => ({
+    '@type': 'ListItem',
+    position: i + 1,
+    name: it.name,
+    ...(it.url ? { item: it.url } : {}),
+  }));
+  return `<script type="application/ld+json">${JSON.stringify({
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: listItems,
+  })}</script>`;
+};
+
+// Organization JSON-LD для главной — Google понимает что это сайт-проект.
+const buildOrganizationJsonLd = () => `<script type="application/ld+json">${JSON.stringify({
+  '@context': 'https://schema.org',
+  '@type': 'Organization',
+  name: 'fc-sever.ru',
+  alternateName: 'GameChallenge',
+  url: 'https://fc-sever.ru',
+  description: 'Любительский футбол Калужской области: 341 клуб, 6 турниров, расписание, результаты, прогнозы.',
+  areaServed: { '@type': 'AdministrativeArea', name: 'Калужская область' },
+  sport: 'Football',
+})}</script>`;
+
 const buildEngineFooter = () => `
   <footer class="engine-footer">
     <a href="/">Главная</a> · <a href="/teams">Команды</a> · <a href="/sitemap.xml">sitemap</a>
@@ -1136,7 +1165,12 @@ app.get('/team/:slug', async (req, res) => {
   } else {
     title = `${t.title} — расписание и результаты — Калужская футбольная лига`;
     description = `${t.title}: расписание ближайших матчей, последние результаты, прогнозы болельщиков.`;
-    jsonLd = `<script type="application/ld+json">${JSON.stringify(buildTeamJsonLd(t))}</script>`;
+    jsonLd = `<script type="application/ld+json">${JSON.stringify(buildTeamJsonLd(t))}</script>`
+      + buildBreadcrumbJsonLd([
+        { name: 'Главная', url: 'https://fc-sever.ru/' },
+        { name: 'Команды', url: 'https://fc-sever.ru/teams' },
+        { name: t.title },
+      ]);
     ogImage = `https://fc-sever.ru/og/team/${slug}.png`;
   }
 
@@ -1227,6 +1261,11 @@ app.get('/tournament/:slug', async (req, res) => {
   <meta property="og:type" content="website">
   <meta property="og:image" content="https://fc-sever.ru/og/tournament/${escapeHtml(t.slug)}.png">
   <link rel="canonical" href="https://fc-sever.ru/tournament/${escapeHtml(t.slug)}">
+  ${buildBreadcrumbJsonLd([
+    { name: 'Главная', url: 'https://fc-sever.ru/' },
+    { name: 'Команды', url: 'https://fc-sever.ru/teams' },
+    { name: t.name },
+  ])}
   ${buildVerificationMeta()}
   <style>${buildEngineStyles()}
     table { width: 100%; border-collapse: collapse; }
@@ -1295,6 +1334,11 @@ app.get('/player/:slug', async (req, res) => {
   <meta property="og:type" content="profile">
   <meta property="og:image" content="https://fc-sever.ru/og/player/${escapeHtml(p.publicSlug)}.png">
   <link rel="canonical" href="https://fc-sever.ru/player/${escapeHtml(p.publicSlug)}">
+  ${buildBreadcrumbJsonLd([
+    { name: 'Главная', url: 'https://fc-sever.ru/' },
+    { name: 'Игроки', url: 'https://fc-sever.ru/teams' },
+    { name: p.username },
+  ])}
   ${buildVerificationMeta()}
   <style>${buildEngineStyles()}</style>
 </head>
@@ -1361,6 +1405,10 @@ app.get('/teams', async (req, res) => {
   <meta property="og:url" content="https://fc-sever.ru/teams">
   <meta property="og:type" content="website">
   <link rel="canonical" href="https://fc-sever.ru/teams">
+  ${buildBreadcrumbJsonLd([
+    { name: 'Главная', url: 'https://fc-sever.ru/' },
+    { name: 'Команды' },
+  ])}
   ${buildVerificationMeta()}
   <style>${buildEngineStyles()}</style>
 </head>
