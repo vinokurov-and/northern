@@ -259,7 +259,7 @@ export const EngineHome = () => {
                     <Typography sx={{ color: TOTAL_TEXT_MUTED, fontSize: 14, mb: 2 }}>
                         Забери страницу команды — добавь логотип, состав, расскажи болельщикам.
                     </Typography>
-                    <Link href="https://t.me/totaltournaments_bot?start=claim" legacyBehavior>
+                    <Link href="https://t.me/fcseverbot?start=claim" legacyBehavior>
                         <a
                             style={{
                                 display: 'inline-block',
