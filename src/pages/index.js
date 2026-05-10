@@ -59,7 +59,7 @@ const IndexPage = (props) => {
   // Калужской области. Сам Северный получает страницу /team/severnyy
   // как любой другой клуб с собственным акцентом #9055a2.
   return (
-    <Layout disableSlider beforeMainChildren={<EngineHome />} data={data}></Layout>
+    <Layout disableSlider disableHeader beforeMainChildren={<EngineHome />} data={data}></Layout>
   )
 };
 

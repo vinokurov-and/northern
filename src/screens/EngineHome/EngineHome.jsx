@@ -63,6 +63,7 @@ const TeamSearch = () => {
                 placeholder="Найти команду — например ФК Темп"
                 style={{
                     width: '100%',
+                    boxSizing: 'border-box',
                     padding: '14px 16px',
                     fontSize: 16,
                     borderRadius: 12,
@@ -177,12 +178,55 @@ const TeamsPreview = () => {
     );
 };
 
+const EngineHeader = () => (
+    <Box
+        sx={{
+            background: TOTAL_CARD_BG,
+            borderBottom: `1px solid ${TOTAL_BORDER}`,
+            position: 'sticky',
+            top: 0,
+            zIndex: 100,
+        }}
+    >
+        <Container maxWidth="md">
+            <Stack
+                direction="row"
+                alignItems="center"
+                justifyContent="space-between"
+                sx={{ py: 1.5 }}
+            >
+                <Link href="/" legacyBehavior>
+                    <a style={{ color: TOTAL_ACCENT, textDecoration: 'none', fontSize: 18, fontWeight: 700 }}>
+                        fc-sever.ru
+                    </a>
+                </Link>
+                <Link href="/app/list" legacyBehavior>
+                    <a
+                        style={{
+                            background: TOTAL_ACCENT,
+                            color: '#FFFFFF',
+                            textDecoration: 'none',
+                            padding: '8px 16px',
+                            borderRadius: 8,
+                            fontSize: 14,
+                            fontWeight: 600,
+                        }}
+                    >
+                        Прогнозы
+                    </a>
+                </Link>
+            </Stack>
+        </Container>
+    </Box>
+);
+
 export const EngineHome = () => {
     const theme = useTheme();
     const isMobile = useMediaQuery('(max-width:600px)');
     return (
         <Box sx={{ background: TOTAL_BG, minHeight: '100vh', pb: 8 }}>
-            <Container maxWidth="md" sx={{ pt: { xs: 4, sm: 8 }, pb: 4 }}>
+            <EngineHeader />
+            <Container maxWidth="md" sx={{ pt: { xs: 4, sm: 6 }, pb: 4 }}>
                 <Stack spacing={2} alignItems="center" sx={{ textAlign: 'center', mb: 4 }}>
                     <Typography
                         sx={{

@@ -4,12 +4,15 @@ import { Header } from "./Header";
 import { Main } from "./Main";
 import { Footer } from "./Footer";
 
-export const Layout = ({ children, disableSlider = false }) => {
+export const Layout = ({ children, disableSlider = false, disableHeader = false }) => {
+  // disableHeader — для главной Engine (отдельный header в EngineHome).
+  // Legacy-страницы (/players, /news, /works) сохраняют старый Header
+  // ФК Северного, потому что они и есть legacy раздел.
   return (
     <>
-      <Header />
+      {!disableHeader && <Header />}
       {!disableSlider && <Slider />}
-      {disableSlider && <div style={{paddingTop: 110}} />}
+      {disableSlider && !disableHeader && <div style={{paddingTop: 110}} />}
       <Main>
         {children}
       </Main>
