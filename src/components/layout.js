@@ -3,10 +3,10 @@ import Head from "next/head";
 import { Layout } from "../core/ui/Layout";
 
 const TemplateWrapper = (props) => {
-  const { children, beforeMainChildren = null, disableSlider = false } = props;
+  const { children, beforeMainChildren = null, disableSlider = false, disableHeader = false } = props;
 
   return (
-    <Layout disableSlider={disableSlider}>
+    <Layout disableSlider={disableSlider} disableHeader={disableHeader}>
       <Head>
         <script
           data-ad-client="ca-pub-5506357121404841"
