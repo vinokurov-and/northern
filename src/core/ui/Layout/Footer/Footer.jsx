@@ -9,7 +9,9 @@ export const Footer = () => {
       sx={{
         mt: 6,
         py: 3,
-        backgroundColor: 'rgba(40, 40, 90, 0.98)',
+        // Total-палитра (Engine). Раньше был тёмно-фиолетовый rgba(40,40,90)
+        // от ФК Северный — не подходит к нынешнему бренду движка.
+        backgroundColor: '#1F2A24',
         color: 'rgba(255, 255, 255, 0.85)',
         borderTop: '1px solid rgba(255, 255, 255, 0.08)',
       }}

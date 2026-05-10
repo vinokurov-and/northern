@@ -1,9 +1,11 @@
 import React from "react";
 import Layout from "../components/layout";
 import client from "../utils/datacms";
-import { parse } from 'node-html-parser';
 import { EngineHome } from "../screens/EngineHome";
 
+// Минимальный QUERY — только то что нужно для favicon и siteName.
+// Раньше тянули home.copyright/introText/works/players/news — всё legacy
+// контент расформированной ФК Северный, на главной Engine не используется.
 const QUERY = `
 {
   _site {
@@ -14,38 +16,7 @@ const QUERY = `
       tag
       content
       attributes
-      
       __typename
-    }
-  }
-  home {
-     copyright
-    _seoMetaTags {
-      tag
-      content
-      attributes
-      __typename
-    }
-    introText
-  }
-  
-  allSocialProfiles {
-    profileType
-    url
-  }
-  
-}
-`
-
-const WORKS = `
-{
-  allWorks{
-    id
-    title
-    slug
-    excerpt
-    coverImage {
-      url
     }
   }
 }
@@ -99,80 +70,9 @@ function fetchData(url) {
 }
 
 
-export const getStaticProps = async (data) => {
-
-  const response = await client({
-    query: QUERY
-  });
-
-  const response2 = await client({
-    query: WORKS
-  });
-
-  let playersDb;
-  try {
-    playersDb = await fetchData('https://fc-sever.ru/c/players');
-  } catch {
-    playersDb = '{ "result": []  }'
-  }
-
-  let jsonPlayersDb;
-  try {
-    jsonPlayersDb = JSON.parse(playersDb).result || [];
-  } catch {
-    jsonPlayersDb = [];
-  }
-
-  // const allPlayersDb = jsonPlayersDb.map(item => item.externalId);
-
-  // const allPlayers = playersResponse.data.allPlayers.filter(item => !allPlayersDb.includes(Number(item.id)));
-
-  let r;
-  try {
-    r = await fetchData('https://fc-sever.ru/c/news');
-  } catch {
-    r = '{ "result": []  }'
-  }
-
-  let news;
-  try {
-    news = JSON.parse(r).result || [];
-  } catch {
-    news = [];
-  }
-
-  const gamesHtml = await fetchHtml('https://kfl-football.ru/tournament/1033939/calendar?type=tours');
-
-  const kflDom = parse(gamesHtml);
-
-  const games = [];
-
-  const sheduleItems = kflDom.querySelectorAll('.schedule__matches-item');
-
-  sheduleItems.forEach(scheduleItem => {
-    const teams = scheduleItem.querySelectorAll('.schedule__team-name');
-
-    if (teams.find(item => item.innerText.toLocaleLowerCase().includes('"северный"'))) {
-      const date = scheduleItem.querySelector('.schedule__time');
-      const score = scheduleItem.querySelector('.schedule__score-main');
-      const place = scheduleItem.querySelector('.schedule__place');
-      const round = scheduleItem.querySelector('.schedule__round-main');
-      const scheduleScoreMain = scheduleItem.querySelector('.schedule__score');
-      games.push({
-        home: teams[0].innerText.trim(),
-        guest: teams[1].innerText.trim(),
-        date: date.innerText.trim(),
-        score: score.innerText.trim(),
-        place: place?.innerText.trim() || '-',
-        tournament: round?.innerText.trim(),
-        kflUrl: scheduleScoreMain ? 'https://kfl-football.ru' + scheduleScoreMain.getAttribute('href') : undefined
-      });
-    }
-  })
-
-  // Обработка данных и передача их компоненту
-  return { props: { data: response.data, works: [...(news || []), ...response2.data.allWorks], games, players: [...jsonPlayersDb] } }
-
-}
+export const getStaticProps = async () => {
+  const response = await client({ query: QUERY });
+  return { props: { data: response.data } };
+};
 
 export default IndexPage;
