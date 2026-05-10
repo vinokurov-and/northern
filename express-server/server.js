@@ -583,6 +583,7 @@ const SITEMAP_TTL_MS = 60 * 60 * 1000;
 let sitemapCache = { ts: 0, value: null };
 let sitemapTeamsCache = { ts: 0, value: null };
 let sitemapPlayersCache = { ts: 0, value: null };
+let sitemapTournamentsCache = { ts: 0, value: null };
 
 const fetchTotalApi = (apiPath) => new Promise((resolve) => {
   const apiHttps = require('https');
@@ -612,7 +613,46 @@ const fetchTotalApi = (apiPath) => new Promise((resolve) => {
 const fetchSitemapGames = () => fetchTotalApi('/api/sitemap-games');
 const fetchSitemapTeams = () => fetchTotalApi('/api/sitemap-teams');
 const fetchSitemapPlayers = () => fetchTotalApi('/api/sitemap-players');
+const fetchSitemapTournaments = () => fetchTotalApi('/api/sitemap-tournaments');
 const fetchTeamsIndex = () => fetchTotalApi('/api/teams-index');
+
+const fetchTournamentRaw = (slug) => new Promise((resolve) => {
+  const apiHttps = require('https');
+  const opts = {
+    hostname: 'api.fc-sever.ru', port: 83, path: `/api/tournament/${encodeURIComponent(slug)}`,
+    method: 'GET', timeout: 5000, agent: apiKeepAliveAgent,
+    headers: { 'User-Agent': 'northern-ssr' },
+  };
+  const r = apiHttps.request(opts, (resp) => {
+    if (resp.statusCode !== 200) return resolve(null);
+    let data = '';
+    resp.on('data', (c) => data += c);
+    resp.on('end', () => {
+      try { const j = JSON.parse(data); resolve(j && j.ok ? j.result : null); }
+      catch { resolve(null); }
+    });
+  });
+  r.on('error', () => resolve(null));
+  r.on('timeout', () => { r.destroy(); resolve(null); });
+  r.end();
+});
+
+const TOURNAMENT_TTL_MS = 5 * 60 * 1000;
+const tournamentCache = new Map();
+const fetchTournament = async (slug) => {
+  const key = String(slug);
+  const cached = tournamentCache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.ts < TOURNAMENT_TTL_MS) return cached.value;
+  const value = await fetchTournamentRaw(slug);
+  tournamentCache.set(key, { ts: now, value });
+  if (tournamentCache.size > 1000) {
+    for (const [k, v] of tournamentCache) {
+      if (now - v.ts >= TOURNAMENT_TTL_MS) tournamentCache.delete(k);
+    }
+  }
+  return value;
+};
 
 // /api/player/<slug> на total-API для SSR /player/<slug>. Cache 5 мин.
 const fetchPlayerRaw = (slug) => new Promise((resolve) => {
@@ -1039,6 +1079,70 @@ const fetchTeamsIndexCached = async () => {
   return value;
 };
 
+// SSR /tournament/<slug> — таблица + расписание турнира.
+app.get('/tournament/:slug', async (req, res) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  if (!/^[a-z0-9-]{1,80}$/.test(slug)) {
+    return res.redirect(302, '/teams');
+  }
+  const t = await fetchTournament(slug);
+  if (!t) {
+    return res.status(404).type('text/html; charset=utf-8').send(
+      `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Турнир не найден</title></head><body><p>Турнир не найден. <a href="/">На главную</a></p></body></html>`
+    );
+  }
+  const tableRows = (t.table || []).map((row, i) => `
+    <tr>
+      <td>${i + 1}</td>
+      <td>${row.teamSlug ? `<a href="/team/${escapeHtml(row.teamSlug)}">${escapeHtml(row.title)}</a>` : escapeHtml(row.title)}</td>
+      <td>${row.played}</td>
+      <td>${row.wins}</td>
+      <td>${row.draws}</td>
+      <td>${row.losses}</td>
+      <td>${row.goalsFor}-${row.goalsAgainst}</td>
+      <td><strong>${row.points}</strong></td>
+    </tr>`).join('');
+  const matchLi = (m) => {
+    const date = formatMatchDate(m.datetime);
+    const score = (m.homeScore != null && m.guestScore != null) ? ` ${m.homeScore}:${m.guestScore}` : '';
+    return `<li><a href="/match/${m.gameId}">${escapeHtml(m.home)} —${escapeHtml(score)} ${escapeHtml(m.guest)}</a>${date ? ` (${escapeHtml(date)})` : ''}</li>`;
+  };
+  const upcomingHtml = (t.upcomingMatches || []).map(matchLi).join('');
+  const recentHtml = (t.recentMatches || []).map(matchLi).join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtml(t.name)} — таблица и расписание</title>
+  <meta name="description" content="${escapeHtml(t.name)}: турнирная таблица, расписание ближайших матчей, последние результаты.">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta property="og:title" content="${escapeHtml(t.name)}">
+  <meta property="og:description" content="Таблица и расписание турнира.">
+  <meta property="og:url" content="https://fc-sever.ru/tournament/${escapeHtml(t.slug)}">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://fc-sever.ru/tournament/${escapeHtml(t.slug)}">
+  ${buildVerificationMeta()}
+  <style>${buildEngineStyles()}
+    table { width: 100%; border-collapse: collapse; }
+    table th, table td { padding: 6px 8px; text-align: left; font-size: 13px; border-bottom: 1px solid #E5E7EB; }
+    table th { font-weight: 600; color: #6B7280; }
+    table td a { color: #1F2937; text-decoration: none; }
+    table td a:hover { color: #30463B; }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(t.name)}</h1>
+  ${tableRows ? `<section class="card"><h2>Таблица</h2><table><thead><tr><th>#</th><th>Команда</th><th>И</th><th>В</th><th>Н</th><th>П</th><th>Голы</th><th>О</th></tr></thead><tbody>${tableRows}</tbody></table></section>` : ''}
+  ${upcomingHtml ? `<section class="card"><h2>Ближайшие матчи</h2><ul>${upcomingHtml}</ul></section>` : ''}
+  ${recentHtml ? `<section class="card"><h2>Последние результаты</h2><ul>${recentHtml}</ul></section>` : ''}
+  <footer><a href="/">На главную</a> · <a href="/teams">Все команды</a></footer>
+</body>
+</html>`;
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.type('text/html; charset=utf-8').send(html);
+});
+
 // SSR /player/<slug> — публичный профиль игрока. Виральный крючок:
 // игрок шерит свою ссылку в командный чат WhatsApp/Telegram → друзья
 // видят его профиль, расписание команды и могут опт-ин «Я играю» сами.
@@ -1181,6 +1285,11 @@ app.get('/sitemap.xml', async (req, res) => {
     players = await fetchSitemapPlayers();
     if (players) sitemapPlayersCache = { ts: now, value: players };
   }
+  let tournaments = sitemapTournamentsCache.value;
+  if (!tournaments || now - sitemapTournamentsCache.ts >= SITEMAP_TTL_MS) {
+    tournaments = await fetchSitemapTournaments();
+    if (tournaments) sitemapTournamentsCache = { ts: now, value: tournaments };
+  }
   if (!games && !teams) {
     return res.status(503).type('text/plain').send('sitemap unavailable');
   }
@@ -1203,6 +1312,16 @@ app.get('/sitemap.xml', async (req, res) => {
     return `  <url><loc>https://fc-sever.ru/team/${t.slug}</loc><changefreq>monthly</changefreq></url>`;
   }).filter(Boolean).join('\n');
 
+  const tournamentsList = (tournaments || []).slice(0, 1000);
+  const tournamentsUrls = tournamentsList.map((t) => {
+    if (!t || !t.slug) return '';
+    if (t.lastmod) {
+      const lastmod = new Date(t.lastmod * 1000).toISOString().slice(0, 10);
+      return `  <url><loc>https://fc-sever.ru/tournament/${t.slug}</loc><lastmod>${lastmod}</lastmod><changefreq>daily</changefreq></url>`;
+    }
+    return `  <url><loc>https://fc-sever.ru/tournament/${t.slug}</loc><changefreq>weekly</changefreq></url>`;
+  }).filter(Boolean).join('\n');
+
   const playersList = (players || []).slice(0, 5000);
   const playersUrls = playersList.map((p) => {
     if (!p || !p.slug) return '';
@@ -1219,6 +1338,7 @@ app.get('/sitemap.xml', async (req, res) => {
   <url><loc>https://fc-sever.ru/teams</loc><changefreq>daily</changefreq></url>
   <url><loc>https://fc-sever.ru/app/list</loc><changefreq>daily</changefreq></url>
 ${teamsUrls}
+${tournamentsUrls}
 ${playersUrls}
 ${gamesUrls}
 </urlset>`;
