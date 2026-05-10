@@ -2,9 +2,7 @@ import React from "react";
 import Layout from "../components/layout";
 import client from "../utils/datacms";
 import { parse } from 'node-html-parser';
-import { News } from "../screens/News";
-import { Players } from "../screens/Players";
-import { MatchPredictWidget } from "../screens/MatchPredictWidget";
+import { EngineHome } from "../screens/EngineHome";
 
 const QUERY = `
 {
@@ -55,18 +53,13 @@ const WORKS = `
 
 
 const IndexPage = (props) => {
-  const { data, works, games, players } = props;
+  const { data } = props;
+  // Главная — лендинг Engine. Legacy News+Players (ФК Северный) убраны:
+  // команда расформирована, домен теперь движок любительского футбола
+  // Калужской области. Сам Северный получает страницу /team/severnyy
+  // как любой другой клуб с собственным акцентом #9055a2.
   return (
-    <Layout beforeMainChildren={
-      <>
-        {/* <GamesAnnouncementScreen data={games} /> */}
-        <MatchPredictWidget />
-        <News works={works || []} />
-        <Players data={players} />
-        {/* TODO(#27): разместить AdBlock ad-admitad-home-footer после одобрения Admitad */}
-        {/* <AdBlock ctaId="ad-admitad-home-footer" erid="..." html="..." /> */}
-      </>
-    } data={data}></Layout>
+    <Layout disableSlider beforeMainChildren={<EngineHome />} data={data}></Layout>
   )
 };
 
