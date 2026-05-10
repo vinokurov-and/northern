@@ -33,6 +33,36 @@ const apiKeepAliveAgent = new https.Agent({
   rejectUnauthorized: false,
 });
 
+// Total-design tokens — единая система для SSR-страниц engine'а
+// (`/teams`, `/team/<slug>`, `/match/:id`). Главная fc-sever.ru пока
+// остаётся в legacy-стиле ФК Северного — переезд в отдельной задаче.
+//
+// accent — primary бренд Total. Может быть переопределён в /team/<slug>
+// через team.accentColor (см. миграция 038): ФК Северный получает свой
+// исторический #9055a2 как один из клубов в движке.
+const TOTAL_ACCENT = '#30463B';
+const TOTAL_BG = '#F5F7F5';
+const TOTAL_CARD_BG = '#FFFFFF';
+const TOTAL_BORDER = '#E5E7EB';
+const TOTAL_TEXT = '#1F2937';
+const TOTAL_TEXT_MUTED = '#6B7280';
+const TOTAL_FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+
+// Хелпер: общий CSS для SSR-страниц engine'а. Принимает accent-цвет (для
+// /team/<slug> можно подставить team.accentColor, для /teams — TOTAL_ACCENT).
+const buildEngineStyles = (accent = TOTAL_ACCENT) => `
+  body { font-family: ${TOTAL_FONT_STACK}; max-width: 960px; margin: 0 auto; padding: 24px 16px; color: ${TOTAL_TEXT}; background: ${TOTAL_BG}; line-height: 1.5; }
+  h1 { font-size: 24px; margin: 0 0 8px; color: ${TOTAL_TEXT}; }
+  h2 { font-size: 16px; margin: 0 0 12px; color: ${accent}; font-weight: 600; }
+  .lead { color: ${TOTAL_TEXT_MUTED}; margin-bottom: 24px; font-size: 14px; }
+  .card { background: ${TOTAL_CARD_BG}; border-radius: 16px; padding: 16px 20px; margin-bottom: 12px; border: 1px solid ${TOTAL_BORDER}; }
+  ul.teams-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+  ul.teams-list a { color: ${TOTAL_TEXT}; text-decoration: none; padding: 6px 0; display: block; border-bottom: 1px solid transparent; }
+  ul.teams-list a:hover { color: ${accent}; border-bottom-color: ${accent}; }
+  footer { margin-top: 24px; text-align: center; color: ${TOTAL_TEXT_MUTED}; font-size: 12px; }
+  footer a { color: ${accent}; text-decoration: none; }
+`;
+
 // Verify meta-tags для Yandex Webmaster и Google Search Console. Токены
 // задаются через env (YANDEX_VERIFICATION / GOOGLE_VERIFICATION). Без env
 // возвращается пустая строка — meta не выводится. Helper встраивается во все
@@ -1007,23 +1037,12 @@ app.get('/teams', async (req, res) => {
   <meta property="og:type" content="website">
   <link rel="canonical" href="https://fc-sever.ru/teams">
   ${buildVerificationMeta()}
-  <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; max-width: 960px; margin: 0 auto; padding: 24px 16px; color: #1F2937; background: #F5F7F5; }
-    h1 { font-size: 24px; margin: 0 0 8px; }
-    .lead { color: #6B7280; margin-bottom: 24px; font-size: 14px; }
-    .group { background: #FFFFFF; border-radius: 12px; padding: 16px 20px; margin-bottom: 16px; }
-    .group h2 { font-size: 16px; margin: 0 0 12px; color: #30463B; }
-    .teams-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
-    .teams-list a { color: #1F2937; text-decoration: none; padding: 6px 0; display: block; border-bottom: 1px solid transparent; }
-    .teams-list a:hover { color: #30463B; border-bottom-color: #30463B; }
-    footer { margin-top: 24px; text-align: center; color: #9CA3AF; font-size: 12px; }
-    footer a { color: #30463B; text-decoration: none; }
-  </style>
+  <style>${buildEngineStyles()}</style>
 </head>
 <body>
   <h1>Команды</h1>
   <p class="lead">${total} клубов Калужской области с актуальным расписанием.</p>
-  ${groupsHtml}
+  ${groupsHtml.replace(/<section class="group">/g, '<section class="card">')}
   <footer>
     <a href="/">На главную</a> · <a href="/sitemap.xml">sitemap</a>
   </footer>
