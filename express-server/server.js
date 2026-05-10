@@ -612,6 +612,47 @@ const fetchSitemapGames = () => fetchTotalApi('/api/sitemap-games');
 const fetchSitemapTeams = () => fetchTotalApi('/api/sitemap-teams');
 const fetchTeamsIndex = () => fetchTotalApi('/api/teams-index');
 
+// /api/player/<slug> на total-API для SSR /player/<slug>. Cache 5 мин.
+const fetchPlayerRaw = (slug) => new Promise((resolve) => {
+  const apiHttps = require('https');
+  const opts = {
+    hostname: 'api.fc-sever.ru', port: 83, path: `/api/player/${encodeURIComponent(slug)}`,
+    method: 'GET', timeout: 5000, agent: apiKeepAliveAgent,
+    headers: { 'User-Agent': 'northern-ssr' },
+  };
+  const r = apiHttps.request(opts, (resp) => {
+    if (resp.statusCode !== 200) return resolve(null);
+    let data = '';
+    resp.on('data', (c) => data += c);
+    resp.on('end', () => {
+      try {
+        const j = JSON.parse(data);
+        resolve(j && j.ok ? j.result : null);
+      } catch { resolve(null); }
+    });
+  });
+  r.on('error', () => resolve(null));
+  r.on('timeout', () => { r.destroy(); resolve(null); });
+  r.end();
+});
+
+const PLAYER_TTL_MS = 5 * 60 * 1000;
+const playerCache = new Map();
+const fetchPlayer = async (slug) => {
+  const key = String(slug);
+  const cached = playerCache.get(key);
+  const now = Date.now();
+  if (cached && now - cached.ts < PLAYER_TTL_MS) return cached.value;
+  const value = await fetchPlayerRaw(slug);
+  playerCache.set(key, { ts: now, value });
+  if (playerCache.size > 5000) {
+    for (const [k, v] of playerCache) {
+      if (now - v.ts >= PLAYER_TTL_MS) playerCache.delete(k);
+    }
+  }
+  return value;
+};
+
 // /api/team/<slug> на total-API. Cache 5 мин в памяти. Возвращает null
 // при 404/ошибке/таймауте — SSR отдаёт generic 404 fallback.
 const TEAM_PAGE_TTL_MS = 5 * 60 * 1000;
@@ -988,6 +1029,65 @@ const fetchTeamsIndexCached = async () => {
   if (value) teamsIndexCache = { ts: now, value };
   return value;
 };
+
+// SSR /player/<slug> — публичный профиль игрока. Виральный крючок:
+// игрок шерит свою ссылку в командный чат WhatsApp/Telegram → друзья
+// видят его профиль, расписание команды и могут опт-ин «Я играю» сами.
+app.get('/player/:slug', async (req, res) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  if (!/^[a-z0-9-]{1,80}$/.test(slug)) {
+    return res.redirect(302, '/teams');
+  }
+  const p = await fetchPlayer(slug);
+  if (!p) {
+    res.status(404).type('text/html; charset=utf-8').send(
+      `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>Профиль не найден</title></head><body><p>Профиль не найден. <a href="/">На главную</a></p></body></html>`
+    );
+    return;
+  }
+
+  const playerLine = p.teamsAsPlayer.length > 0
+    ? `Играет за: ${p.teamsAsPlayer.map((t) => `<a href="/team/${escapeHtml(t.slug)}">${escapeHtml(t.title)}</a>`).join(', ')}`
+    : '';
+  const fanLine = p.teamsAsFan.length > 0
+    ? `Болеет за: ${p.teamsAsFan.map((t) => `<a href="/team/${escapeHtml(t.slug)}">${escapeHtml(t.title)}</a>`).join(', ')}`
+    : '';
+  const upcomingHtml = (p.upcomingMatches || []).map((m) => {
+    const date = formatMatchDate(m.datetime);
+    return `<li><a href="/match/${m.gameId}">${escapeHtml(m.home)} — ${escapeHtml(m.guest)}</a>${date ? ` (${escapeHtml(date)})` : ''}${m.tournament ? ` · ${escapeHtml(m.tournament)}` : ''}</li>`;
+  }).join('');
+
+  const accuracy = p.forecastsTotal > 0
+    ? Math.round((p.forecastsCorrect / p.forecastsTotal) * 100)
+    : null;
+
+  const html = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtml(p.username)} — fc-sever.ru</title>
+  <meta name="description" content="${escapeHtml(p.username)}: расписание команд, статистика прогнозов на матчи Калужской футбольной лиги.">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta property="og:title" content="${escapeHtml(p.username)} на fc-sever.ru">
+  <meta property="og:description" content="Расписание команд и прогнозы.">
+  <meta property="og:url" content="https://fc-sever.ru/player/${escapeHtml(p.publicSlug)}">
+  <meta property="og:type" content="profile">
+  <link rel="canonical" href="https://fc-sever.ru/player/${escapeHtml(p.publicSlug)}">
+  ${buildVerificationMeta()}
+  <style>${buildEngineStyles()}</style>
+</head>
+<body>
+  <h1>${escapeHtml(p.username)}</h1>
+  ${playerLine ? `<p class="lead">${playerLine}</p>` : ''}
+  ${fanLine ? `<p class="lead">${fanLine}</p>` : ''}
+  ${accuracy !== null ? `<section class="card"><h2>Прогнозы</h2><p>${p.forecastsTotal} прогнозов · точность ${accuracy}%</p></section>` : ''}
+  ${upcomingHtml ? `<section class="card"><h2>Ближайшие матчи команд</h2><ul>${upcomingHtml}</ul></section>` : ''}
+  <footer><a href="/">На главную</a> · <a href="/teams">Все команды</a></footer>
+</body>
+</html>`;
+  res.setHeader('Cache-Control', 'public, max-age=60');
+  res.type('text/html; charset=utf-8').send(html);
+});
 
 app.get('/teams', async (req, res) => {
   const teams = await fetchTeamsIndexCached();
