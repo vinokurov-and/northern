@@ -15,6 +15,11 @@ const fs = require('fs'),
 const { openDb } = require('./db/Connect');
 const multer = require('multer');
 const compression = require('compression');
+// sharp для генерации OG-картинок (SVG → PNG 1200×630). Lazy-require:
+// если пакет не установлен — OG endpoints вернут 404, но другой код
+// продолжит работать. На проде ставится отдельно через ssh npm install.
+let sharp = null;
+try { sharp = require('sharp'); } catch (e) { console.warn('[og] sharp not installed, /og endpoints disabled'); }
 
 // Сжатие всех ответов (gzip/brotli по Accept-Encoding клиента). Существенно
 // уменьшает размер SSR-HTML карточек матча/клуба и /sitemap.xml — особенно
@@ -60,6 +65,74 @@ const buildEngineHeader = () => `
     </div>
   </header>
 `;
+
+// OG-картинки 1200×630 для шеров в Telegram/WhatsApp/VK. Динамически
+// генерим SVG → PNG через sharp. Файловый кеш в /fcsever/og-cache/.
+// При первом запросе → генерация ~50ms, потом отдаётся статикой.
+const OG_CACHE_DIR = path.join(__dirname, '..', 'og-cache');
+try { fs.mkdirSync(OG_CACHE_DIR, { recursive: true }); } catch {}
+
+const escapeXml = (s) => String(s == null ? '' : s)
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  .replace(/"/g, '&quot;').replace(/'/g, '&apos;');
+
+// Шаблон OG: брендовый фон (accent), большой title по центру, мелкая
+// подпись fc-sever.ru снизу. Текст auto-shrink через viewBox.
+const buildOgSvg = ({ title, subtitle = 'fc-sever.ru · любительский футбол Калужской области', accent = TOTAL_ACCENT }) => {
+  // Длинные названия подрезаются: ~22 символа в строку максимум при font-size 80.
+  const t = String(title || '').slice(0, 80);
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+    <rect width="1200" height="630" fill="${accent}"/>
+    <text x="600" y="300" font-family="-apple-system,Segoe UI,Roboto,Arial,sans-serif" font-size="80" font-weight="700" fill="#FFFFFF" text-anchor="middle" dominant-baseline="middle">${escapeXml(t)}</text>
+    <text x="600" y="560" font-family="-apple-system,Segoe UI,Roboto,Arial,sans-serif" font-size="24" fill="rgba(255,255,255,0.85)" text-anchor="middle">${escapeXml(subtitle)}</text>
+  </svg>`;
+};
+
+const renderOgPng = async (cacheKey, { title, subtitle, accent }) => {
+  if (!sharp) return null;
+  const file = path.join(OG_CACHE_DIR, `${cacheKey}.png`);
+  try {
+    if (fs.existsSync(file)) return fs.readFileSync(file);
+  } catch {}
+  const svg = buildOgSvg({ title, subtitle, accent });
+  const buf = await sharp(Buffer.from(svg)).png().toBuffer();
+  try { fs.writeFileSync(file, buf); } catch {}
+  return buf;
+};
+
+app.get('/og/team/:slug.png', async (req, res) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  if (!/^[a-z0-9-]{1,80}$/.test(slug)) return res.status(404).end();
+  const t = await fetchTeamPage(slug);
+  if (!t) return res.status(404).end();
+  const accent = (t.accentColor && /^#[0-9A-Fa-f]{6}$/.test(t.accentColor)) ? t.accentColor : TOTAL_ACCENT;
+  const buf = await renderOgPng(`team-${slug}`, { title: t.title, accent });
+  if (!buf) return res.status(503).end();
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.type('image/png').send(buf);
+});
+
+app.get('/og/player/:slug.png', async (req, res) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  if (!/^[a-z0-9-]{1,80}$/.test(slug)) return res.status(404).end();
+  const p = await fetchPlayer(slug);
+  if (!p) return res.status(404).end();
+  const buf = await renderOgPng(`player-${slug}`, { title: p.username });
+  if (!buf) return res.status(503).end();
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.type('image/png').send(buf);
+});
+
+app.get('/og/tournament/:slug.png', async (req, res) => {
+  const slug = String(req.params.slug || '').toLowerCase();
+  if (!/^[a-z0-9-]{1,80}$/.test(slug)) return res.status(404).end();
+  const t = await fetchTournament(slug);
+  if (!t) return res.status(404).end();
+  const buf = await renderOgPng(`tournament-${slug}`, { title: t.name });
+  if (!buf) return res.status(503).end();
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.type('image/png').send(buf);
+});
 
 const buildEngineFooter = () => `
   <footer class="engine-footer">
@@ -1056,7 +1129,7 @@ app.get('/team/:slug', async (req, res) => {
   const t = await fetchTeamPage(slug);
   const canonicalUrl = `https://fc-sever.ru/team/${slug}`;
 
-  let title, description, jsonLd = '';
+  let title, description, jsonLd = '', ogImage = 'https://fc-sever.ru/img/og/match-default.png';
   if (!t) {
     title = 'Клуб не найден — fc-sever.ru';
     description = 'Команда не найдена. Открой главную и выбери клуб из списка.';
@@ -1064,6 +1137,7 @@ app.get('/team/:slug', async (req, res) => {
     title = `${t.title} — расписание и результаты — Калужская футбольная лига`;
     description = `${t.title}: расписание ближайших матчей, последние результаты, прогнозы болельщиков.`;
     jsonLd = `<script type="application/ld+json">${JSON.stringify(buildTeamJsonLd(t))}</script>`;
+    ogImage = `https://fc-sever.ru/og/team/${slug}.png`;
   }
 
   const metaTags = `
@@ -1074,7 +1148,7 @@ app.get('/team/:slug', async (req, res) => {
     <meta property="og:url" content="${canonicalUrl}" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="GameChallenge" />
-    <meta property="og:image" content="https://fc-sever.ru/img/og/match-default.png" />
+    <meta property="og:image" content="${ogImage}" />
     <link rel="canonical" href="${canonicalUrl}" />
     ${buildVerificationMeta()}
     ${jsonLd}
@@ -1151,6 +1225,7 @@ app.get('/tournament/:slug', async (req, res) => {
   <meta property="og:description" content="Таблица и расписание турнира.">
   <meta property="og:url" content="https://fc-sever.ru/tournament/${escapeHtml(t.slug)}">
   <meta property="og:type" content="website">
+  <meta property="og:image" content="https://fc-sever.ru/og/tournament/${escapeHtml(t.slug)}.png">
   <link rel="canonical" href="https://fc-sever.ru/tournament/${escapeHtml(t.slug)}">
   ${buildVerificationMeta()}
   <style>${buildEngineStyles()}
@@ -1218,6 +1293,7 @@ app.get('/player/:slug', async (req, res) => {
   <meta property="og:description" content="Расписание команд и прогнозы.">
   <meta property="og:url" content="https://fc-sever.ru/player/${escapeHtml(p.publicSlug)}">
   <meta property="og:type" content="profile">
+  <meta property="og:image" content="https://fc-sever.ru/og/player/${escapeHtml(p.publicSlug)}.png">
   <link rel="canonical" href="https://fc-sever.ru/player/${escapeHtml(p.publicSlug)}">
   ${buildVerificationMeta()}
   <style>${buildEngineStyles()}</style>
