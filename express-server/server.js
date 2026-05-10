@@ -48,10 +48,38 @@ const TOTAL_TEXT = '#1F2937';
 const TOTAL_TEXT_MUTED = '#6B7280';
 const TOTAL_FONT_STACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
 
-// Хелпер: общий CSS для SSR-страниц engine'а. Принимает accent-цвет (для
-// /team/<slug> можно подставить team.accentColor, для /teams — TOTAL_ACCENT).
+// Общий header для всех SSR-страниц engine: лого fc-sever.ru слева,
+// CTA «Прогнозы» справа. Sticky-top, Total-палитра. Дублирует EngineHeader
+// в pages/index.js (Next), здесь чистый HTML — для /teams, /team/<slug>,
+// /tournament/<slug>, /player/<slug>.
+const buildEngineHeader = () => `
+  <header class="engine-header">
+    <div class="engine-header-inner">
+      <a href="/" class="engine-logo">fc-sever.ru</a>
+      <a href="/app/list" class="engine-cta">Прогнозы</a>
+    </div>
+  </header>
+`;
+
+const buildEngineFooter = () => `
+  <footer class="engine-footer">
+    <a href="/">Главная</a> · <a href="/teams">Команды</a> · <a href="/sitemap.xml">sitemap</a>
+  </footer>
+`;
+
+// Хелпер: общий CSS для SSR-страниц engine'а. Включает header/footer/content
+// + базовые типографику и карточки. Один источник правды для /teams,
+// /team/<slug>, /tournament/<slug>, /player/<slug>.
 const buildEngineStyles = (accent = TOTAL_ACCENT) => `
-  body { font-family: ${TOTAL_FONT_STACK}; max-width: 960px; margin: 0 auto; padding: 24px 16px; color: ${TOTAL_TEXT}; background: ${TOTAL_BG}; line-height: 1.5; }
+  body { font-family: ${TOTAL_FONT_STACK}; margin: 0; padding: 0; color: ${TOTAL_TEXT}; background: ${TOTAL_BG}; line-height: 1.5; }
+  .engine-header { background: ${TOTAL_CARD_BG}; border-bottom: 1px solid ${TOTAL_BORDER}; position: sticky; top: 0; z-index: 100; }
+  .engine-header-inner { max-width: 960px; margin: 0 auto; padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; }
+  .engine-logo { color: ${accent}; text-decoration: none; font-size: 18px; font-weight: 700; }
+  .engine-cta { background: ${accent}; color: #FFFFFF; text-decoration: none; padding: 8px 16px; border-radius: 8px; font-size: 14px; font-weight: 600; }
+  .engine-cta:hover { opacity: 0.92; }
+  .engine-content { max-width: 960px; margin: 0 auto; padding: 24px 16px; }
+  .engine-footer { max-width: 960px; margin: 0 auto; padding: 24px 16px; text-align: center; color: ${TOTAL_TEXT_MUTED}; font-size: 12px; }
+  .engine-footer a { color: ${accent}; text-decoration: none; margin: 0 4px; }
   h1 { font-size: 24px; margin: 0 0 8px; color: ${TOTAL_TEXT}; }
   h2 { font-size: 16px; margin: 0 0 12px; color: ${accent}; font-weight: 600; }
   .lead { color: ${TOTAL_TEXT_MUTED}; margin-bottom: 24px; font-size: 14px; }
@@ -59,8 +87,10 @@ const buildEngineStyles = (accent = TOTAL_ACCENT) => `
   ul.teams-list { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
   ul.teams-list a { color: ${TOTAL_TEXT}; text-decoration: none; padding: 6px 0; display: block; border-bottom: 1px solid transparent; }
   ul.teams-list a:hover { color: ${accent}; border-bottom-color: ${accent}; }
-  footer { margin-top: 24px; text-align: center; color: ${TOTAL_TEXT_MUTED}; font-size: 12px; }
-  footer a { color: ${accent}; text-decoration: none; }
+  ul { list-style: none; padding: 0; margin: 0; }
+  ul li { padding: 4px 0; }
+  ul li a { color: ${TOTAL_TEXT}; text-decoration: none; }
+  ul li a:hover { color: ${accent}; }
 `;
 
 // Verify meta-tags для Yandex Webmaster и Google Search Console. Токены
@@ -1132,11 +1162,14 @@ app.get('/tournament/:slug', async (req, res) => {
   </style>
 </head>
 <body>
-  <h1>${escapeHtml(t.name)}</h1>
-  ${tableRows ? `<section class="card"><h2>Таблица</h2><table><thead><tr><th>#</th><th>Команда</th><th>И</th><th>В</th><th>Н</th><th>П</th><th>Голы</th><th>О</th></tr></thead><tbody>${tableRows}</tbody></table></section>` : ''}
-  ${upcomingHtml ? `<section class="card"><h2>Ближайшие матчи</h2><ul>${upcomingHtml}</ul></section>` : ''}
-  ${recentHtml ? `<section class="card"><h2>Последние результаты</h2><ul>${recentHtml}</ul></section>` : ''}
-  <footer><a href="/">На главную</a> · <a href="/teams">Все команды</a></footer>
+  ${buildEngineHeader()}
+  <main class="engine-content">
+    <h1>${escapeHtml(t.name)}</h1>
+    ${tableRows ? `<section class="card"><h2>Таблица</h2><table><thead><tr><th>#</th><th>Команда</th><th>И</th><th>В</th><th>Н</th><th>П</th><th>Голы</th><th>О</th></tr></thead><tbody>${tableRows}</tbody></table></section>` : ''}
+    ${upcomingHtml ? `<section class="card"><h2>Ближайшие матчи</h2><ul>${upcomingHtml}</ul></section>` : ''}
+    ${recentHtml ? `<section class="card"><h2>Последние результаты</h2><ul>${recentHtml}</ul></section>` : ''}
+  </main>
+  ${buildEngineFooter()}
 </body>
 </html>`;
   res.setHeader('Cache-Control', 'public, max-age=60');
@@ -1190,12 +1223,15 @@ app.get('/player/:slug', async (req, res) => {
   <style>${buildEngineStyles()}</style>
 </head>
 <body>
-  <h1>${escapeHtml(p.username)}</h1>
-  ${playerLine ? `<p class="lead">${playerLine}</p>` : ''}
-  ${fanLine ? `<p class="lead">${fanLine}</p>` : ''}
-  ${accuracy !== null ? `<section class="card"><h2>Прогнозы</h2><p>${p.forecastsTotal} прогнозов · точность ${accuracy}%</p></section>` : ''}
-  ${upcomingHtml ? `<section class="card"><h2>Ближайшие матчи команд</h2><ul>${upcomingHtml}</ul></section>` : ''}
-  <footer><a href="/">На главную</a> · <a href="/teams">Все команды</a></footer>
+  ${buildEngineHeader()}
+  <main class="engine-content">
+    <h1>${escapeHtml(p.username)}</h1>
+    ${playerLine ? `<p class="lead">${playerLine}</p>` : ''}
+    ${fanLine ? `<p class="lead">${fanLine}</p>` : ''}
+    ${accuracy !== null ? `<section class="card"><h2>Прогнозы</h2><p>${p.forecastsTotal} прогнозов · точность ${accuracy}%</p></section>` : ''}
+    ${upcomingHtml ? `<section class="card"><h2>Ближайшие матчи команд</h2><ul>${upcomingHtml}</ul></section>` : ''}
+  </main>
+  ${buildEngineFooter()}
 </body>
 </html>`;
   res.setHeader('Cache-Control', 'public, max-age=60');
@@ -1209,18 +1245,18 @@ app.get('/teams', async (req, res) => {
     return res.status(503).type('text/plain').send('Service unavailable, try again later');
   }
 
-  // Группировка по последнему турниру для удобства просмотра. Команды без
-  // турнира идут отдельной группой «Архив». Сортировка внутри группы по
-  // алфавиту.
+  // Группировка по последнему турниру. Заголовок группы кликабельный → /tournament/<slug>.
   const grouped = new Map();
   for (const t of teams) {
     if (!t || !t.slug) continue;
     const key = t.lastTournament || 'Архив';
-    if (!grouped.has(key)) grouped.set(key, []);
-    grouped.get(key).push(t);
+    if (!grouped.has(key)) {
+      grouped.set(key, { name: key, slug: t.lastTournamentSlug || null, list: [] });
+    }
+    grouped.get(key).list.push(t);
   }
-  const groups = Array.from(grouped.entries())
-    .map(([name, list]) => ({ name, list: list.sort((a, b) => a.title.localeCompare(b.title, 'ru')) }))
+  const groups = Array.from(grouped.values())
+    .map((g) => ({ ...g, list: g.list.sort((a, b) => a.title.localeCompare(b.title, 'ru')) }))
     .sort((a, b) => {
       if (a.name === 'Архив') return 1;
       if (b.name === 'Архив') return -1;
@@ -1229,7 +1265,7 @@ app.get('/teams', async (req, res) => {
 
   const groupsHtml = groups.map((g) => `
     <section class="group">
-      <h2>${escapeHtml(g.name)}</h2>
+      <h2>${g.slug ? `<a href="/tournament/${escapeHtml(g.slug)}" style="color:inherit;text-decoration:none;">${escapeHtml(g.name)} →</a>` : escapeHtml(g.name)}</h2>
       <ul class="teams-list">
         ${g.list.map((t) => `<li><a href="/team/${escapeHtml(t.slug)}">${escapeHtml(t.title)}</a></li>`).join('\n')}
       </ul>
@@ -1253,12 +1289,13 @@ app.get('/teams', async (req, res) => {
   <style>${buildEngineStyles()}</style>
 </head>
 <body>
-  <h1>Команды</h1>
-  <p class="lead">${total} клубов Калужской области с актуальным расписанием.</p>
-  ${groupsHtml.replace(/<section class="group">/g, '<section class="card">')}
-  <footer>
-    <a href="/">На главную</a> · <a href="/sitemap.xml">sitemap</a>
-  </footer>
+  ${buildEngineHeader()}
+  <main class="engine-content">
+    <h1>Команды</h1>
+    <p class="lead">${total} клубов Калужской области с актуальным расписанием.</p>
+    ${groupsHtml.replace(/<section class="group">/g, '<section class="card">')}
+  </main>
+  ${buildEngineFooter()}
 </body>
 </html>`;
 
