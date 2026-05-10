@@ -100,10 +100,14 @@ jobs:
       - name: Deploy express-server
         timeout-minutes: 10
         run: |
-          echo "Uploading express-server (excluding node_modules and db)..."
+          echo "Uploading express-server (excluding node_modules, db, .env)..."
+          # .env содержит prod-секреты (YANDEX_VERIFICATION, GOOGLE_VERIFICATION,
+          # INDEXNOW_KEY) и не лежит в репо. Без --exclude rsync --delete его
+          # затирает — verify-meta + IndexNow перестают работать после deploy.
           rsync -avz --delete \
             --exclude 'node_modules' \
             --exclude 'db-northen.sqlite' \
+            --exclude '.env' \
             -e "ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3" \
             express-server/ root@${{ secrets.SERVER_HOST }}:/fcsever/express-server/
 
