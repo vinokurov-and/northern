@@ -829,7 +829,13 @@ const fetchPlayer = async (slug) => {
 
 // /api/team/<slug> на total-API. Cache 5 мин в памяти. Возвращает null
 // при 404/ошибке/таймауте — SSR отдаёт generic 404 fallback.
+// Для null значений TTL отдельный, короткий (30 сек): транзиентный
+// 503/timeout total-API не должен «застрять» SSR-404 на 5 минут, иначе
+// бот Yandex/Google закеширует «Клуб не найден» и пометит sitemap как
+// невалидный. 30с хватает чтобы не дидосить total при flood, но и
+// быстро откатиться когда total ожил.
 const TEAM_PAGE_TTL_MS = 5 * 60 * 1000;
+const TEAM_PAGE_NULL_TTL_MS = 30 * 1000;
 const teamPageCache = new Map();
 
 const fetchTeamPageRaw = (slug) => new Promise((resolve) => {
@@ -861,12 +867,16 @@ const fetchTeamPage = async (slug) => {
   const key = String(slug);
   const cached = teamPageCache.get(key);
   const now = Date.now();
-  if (cached && now - cached.ts < TEAM_PAGE_TTL_MS) return cached.value;
+  if (cached) {
+    const ttl = cached.value == null ? TEAM_PAGE_NULL_TTL_MS : TEAM_PAGE_TTL_MS;
+    if (now - cached.ts < ttl) return cached.value;
+  }
   const value = await fetchTeamPageRaw(slug);
   teamPageCache.set(key, { ts: now, value });
   if (teamPageCache.size > 5000) {
     for (const [k, v] of teamPageCache) {
-      if (now - v.ts >= TEAM_PAGE_TTL_MS) teamPageCache.delete(k);
+      const ttl = v.value == null ? TEAM_PAGE_NULL_TTL_MS : TEAM_PAGE_TTL_MS;
+      if (now - v.ts >= ttl) teamPageCache.delete(k);
     }
   }
   return value;
