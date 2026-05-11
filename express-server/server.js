@@ -200,6 +200,15 @@ const buildEngineStyles = (accent = TOTAL_ACCENT) => `
 // возвращается пустая строка — meta не выводится. Helper встраивается во все
 // SSR-страницы (/match/:id, /team/:slug, /teams) — Webmaster проверяет
 // верификацию на главной по умолчанию, но любой URL подтянется.
+// Favicon helper — SVG ставим первым (масштабируемая иконка для Chrome/Firefox/
+// Safari 14+), .ico как fallback. Yandex Webmaster в требованиях говорит «SVG
+// или 120×120» — SVG закрывает.
+const FAVICON_LINKS = [
+  '<link rel="icon" type="image/svg+xml" href="/favicon.svg">',
+  '<link rel="alternate icon" href="/favicon.ico">',
+  '<link rel="apple-touch-icon" href="/favicon.svg">',
+].join('\n    ');
+
 const buildVerificationMeta = () => {
   const parts = [];
   if (process.env.YANDEX_VERIFICATION) {
@@ -1047,6 +1056,7 @@ app.get('/match/:gameId', async (req, res) => {
     <meta property="og:site_name" content="GameChallenge" />
     <meta property="og:image" content="https://fc-sever.ru/img/og/match-default.png" />
     <link rel="canonical" href="${canonicalUrl}" />
+    ${FAVICON_LINKS}
     ${buildVerificationMeta()}
     ${jsonLd}
   `;
@@ -1194,6 +1204,7 @@ app.get('/team/:slug', async (req, res) => {
     <meta property="og:site_name" content="GameChallenge" />
     <meta property="og:image" content="${ogImage}" />
     <link rel="canonical" href="${canonicalUrl}" />
+    ${FAVICON_LINKS}
     ${buildVerificationMeta()}
     ${jsonLd}
   `;
@@ -1276,7 +1287,8 @@ app.get('/tournament/:slug', async (req, res) => {
     { name: 'Команды', url: 'https://fc-sever.ru/teams' },
     { name: t.name },
   ])}
-  ${buildVerificationMeta()}
+  ${FAVICON_LINKS}
+    ${buildVerificationMeta()}
   <style>${buildEngineStyles()}
     table { width: 100%; border-collapse: collapse; }
     table th, table td { padding: 6px 8px; text-align: left; font-size: 13px; border-bottom: 1px solid #E5E7EB; }
@@ -1349,7 +1361,8 @@ app.get('/player/:slug', async (req, res) => {
     { name: 'Игроки', url: 'https://fc-sever.ru/teams' },
     { name: p.username },
   ])}
-  ${buildVerificationMeta()}
+  ${FAVICON_LINKS}
+    ${buildVerificationMeta()}
   <style>${buildEngineStyles()}</style>
 </head>
 <body>
@@ -1419,7 +1432,8 @@ app.get('/teams', async (req, res) => {
     { name: 'Главная', url: 'https://fc-sever.ru/' },
     { name: 'Команды' },
   ])}
-  ${buildVerificationMeta()}
+  ${FAVICON_LINKS}
+    ${buildVerificationMeta()}
   <style>${buildEngineStyles()}</style>
 </head>
 <body>
@@ -1611,7 +1625,8 @@ app.get('/app/*', async (req, res) => {
       <meta property="og:type" content="website" />
       <meta property="og:site_name" content="GameChallenge" />
       <link rel="canonical" href="https://fc-sever.ru${req.path}" />
-      ${buildVerificationMeta()}
+      ${FAVICON_LINKS}
+    ${buildVerificationMeta()}
     `;
     const modifiedHtml = html.replace('</head>', metaTags + '</head>');
     res.send(modifiedHtml);
