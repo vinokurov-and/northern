@@ -165,7 +165,7 @@ const buildOrganizationJsonLd = () => `<script type="application/ld+json">${JSON
 
 const buildEngineFooter = () => `
   <footer class="engine-footer">
-    <a href="/">Главная</a> · <a href="/teams">Команды</a> · <a href="/sitemap.xml">sitemap</a>
+    <a href="/">Главная</a> · <a href="/teams">Команды</a> · <a href="/map">Карта</a> · <a href="/sitemap.xml">sitemap</a>
   </footer>
 `;
 
@@ -756,6 +756,20 @@ const fetchSitemapTeams = () => fetchTotalApi('/api/sitemap-teams');
 const fetchSitemapPlayers = () => fetchTotalApi('/api/sitemap-players');
 const fetchSitemapTournaments = () => fetchTotalApi('/api/sitemap-tournaments');
 const fetchTeamsIndex = () => fetchTotalApi('/api/teams-index');
+const fetchTeamsMap = () => fetchTotalApi('/api/teams-map');
+
+// Кеш /map — координаты редко меняются (после backfill), 1ч.
+const TEAMS_MAP_TTL_MS = 60 * 60 * 1000;
+let teamsMapCache = { ts: 0, value: null };
+const fetchTeamsMapCached = async () => {
+  const now = Date.now();
+  if (teamsMapCache.value && now - teamsMapCache.ts < TEAMS_MAP_TTL_MS) {
+    return teamsMapCache.value;
+  }
+  const v = await fetchTeamsMap();
+  if (v) teamsMapCache = { ts: now, value: v };
+  return v;
+};
 
 const fetchTournamentRaw = (slug) => new Promise((resolve) => {
   const apiHttps = require('https');
@@ -1451,6 +1465,141 @@ app.get('/teams', async (req, res) => {
   res.type('text/html; charset=utf-8').send(html);
 });
 
+// Карта клубов Калужской области. Leaflet (CDN) + marker cluster. Точки
+// группируются в Калуге (большинство клубов там), кликом раскрываются.
+// SSR-видимый <ul> со списком городов — для краулеров без JS.
+app.get('/map', async (req, res) => {
+  const teams = await fetchTeamsMapCached();
+
+  if (!teams) {
+    return res.status(503).type('text/plain').send('Service unavailable, try again later');
+  }
+
+  // Группировка по городу для SSR-fallback (nojs-видимый список).
+  const byCity = new Map();
+  for (const t of teams) {
+    if (!t || !t.slug || !t.lat || !t.lng) continue;
+    const key = t.city || 'Без города';
+    if (!byCity.has(key)) byCity.set(key, []);
+    byCity.get(key).push(t);
+  }
+  const cities = Array.from(byCity.entries())
+    .map(([name, list]) => ({ name, list: list.sort((a, b) => a.title.localeCompare(b.title, 'ru')) }))
+    .sort((a, b) => b.list.length - a.list.length);
+
+  const cityListHtml = cities.map((c) => `
+    <section class="card">
+      <h2>${escapeHtml(c.name)} <span style="color:${TOTAL_TEXT_MUTED};font-weight:400;font-size:14px;">· ${c.list.length}</span></h2>
+      <ul class="teams-list">
+        ${c.list.map((t) => `<li><a href="/team/${escapeHtml(t.slug)}">${escapeHtml(t.title)}</a></li>`).join('\n')}
+      </ul>
+    </section>
+  `).join('\n');
+
+  // JSON для клиентского Leaflet. Минимизируем — только поля для карты.
+  const mapData = JSON.stringify(teams.map((t) => ({
+    slug: t.slug, title: t.title, city: t.city,
+    lat: t.lat, lng: t.lng,
+    color: t.accentColor || TOTAL_ACCENT,
+    count: t.matchesCount || 0,
+  })));
+
+  const total = teams.length;
+  const html = `<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Карта футбольных клубов Калужской области — fc-sever.ru</title>
+  <meta name="description" content="Интерактивная карта ${total} футбольных клубов Калужской области. Кликни на маркер — открой клуб.">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta property="og:title" content="Карта клубов Калужской области">
+  <meta property="og:description" content="${total} футбольных клубов на одной карте.">
+  <meta property="og:url" content="https://fc-sever.ru/map">
+  <meta property="og:type" content="website">
+  <link rel="canonical" href="https://fc-sever.ru/map">
+  ${buildBreadcrumbJsonLd([
+    { name: 'Главная', url: 'https://fc-sever.ru/' },
+    { name: 'Карта клубов' },
+  ])}
+  ${FAVICON_LINKS}
+  ${buildVerificationMeta()}
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <style>
+    ${buildEngineStyles()}
+    #map { width: 100%; height: 70vh; min-height: 480px; border-radius: 12px; border: 1px solid ${TOTAL_BORDER}; background: ${TOTAL_BG}; }
+    .map-stats { display: flex; gap: 16px; flex-wrap: wrap; margin-bottom: 12px; font-size: 13px; color: ${TOTAL_TEXT_MUTED}; }
+    .map-stats strong { color: ${TOTAL_TEXT}; font-weight: 600; }
+    .map-popup-title { font-size: 14px; font-weight: 700; color: ${TOTAL_TEXT}; margin-bottom: 4px; }
+    .map-popup-city { font-size: 12px; color: ${TOTAL_TEXT_MUTED}; margin-bottom: 8px; }
+    .map-popup-cta { display: inline-block; padding: 6px 12px; background: ${TOTAL_ACCENT}; color: white !important; text-decoration: none; border-radius: 6px; font-size: 13px; font-weight: 600; }
+    .nojs-hint { display: none; }
+    .nojs .nojs-hint { display: block; }
+    .nojs #map { display: none; }
+  </style>
+</head>
+<body class="nojs">
+  ${buildEngineHeader()}
+  <main class="engine-content">
+    <h1>Карта клубов</h1>
+    <p class="lead">${total} футбольных клубов Калужской области. Кликни на маркер, чтобы открыть страницу клуба.</p>
+    <div class="map-stats">
+      <span><strong>${total}</strong> клубов</span>
+      <span><strong>${cities.length}</strong> городов</span>
+    </div>
+    <div id="map" role="region" aria-label="Карта клубов"></div>
+    <div class="nojs-hint">
+      <p style="color:${TOTAL_TEXT_MUTED};font-size:13px;">Для отображения карты включи JavaScript. Полный список ниже.</p>
+    </div>
+    <h2 style="margin-top:32px;">Список по городам</h2>
+    ${cityListHtml}
+  </main>
+  ${buildEngineFooter()}
+  <script>document.body.classList.remove('nojs');</script>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+  <script>
+    (function() {
+      var data = ${mapData};
+      if (!window.L) return;
+      // Центр: Калуга. Zoom 9 — вся область в кадре.
+      var map = L.map('map', { scrollWheelZoom: false }).setView([54.5293, 36.2754], 9);
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 18,
+        attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      }).addTo(map);
+      var cluster = L.markerClusterGroup ? L.markerClusterGroup({ maxClusterRadius: 40 }) : null;
+      data.forEach(function(t) {
+        var sizeFactor = Math.min(1 + Math.log(1 + t.count) / 2, 2.2);
+        var icon = L.divIcon({
+          className: 'club-marker',
+          html: '<div style="width:' + (10 * sizeFactor) + 'px;height:' + (10 * sizeFactor) + 'px;background:' + t.color + ';border:2px solid white;border-radius:50%;box-shadow:0 2px 4px rgba(0,0,0,0.3);"></div>',
+          iconSize: [16, 16],
+          iconAnchor: [8, 8],
+        });
+        var m = L.marker([t.lat, t.lng], { icon: icon, title: t.title });
+        var popup = '<div class="map-popup-title">' + escapeHtmlClient(t.title) + '</div>' +
+          (t.city ? '<div class="map-popup-city">' + escapeHtmlClient(t.city) + '</div>' : '') +
+          '<a class="map-popup-cta" href="/team/' + encodeURIComponent(t.slug) + '">Открыть клуб →</a>';
+        m.bindPopup(popup);
+        if (cluster) cluster.addLayer(m); else m.addTo(map);
+      });
+      if (cluster) map.addLayer(cluster);
+      function escapeHtmlClient(s) {
+        return String(s).replace(/[&<>"']/g, function(c) {
+          return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c];
+        });
+      }
+    })();
+  </script>
+</body>
+</html>`;
+
+  res.setHeader('Cache-Control', 'public, max-age=600');
+  res.type('text/html; charset=utf-8').send(html);
+});
+
 // Sitemap для SEO (US-3 в ssr-match-pages.md). Cache 1ч в памяти, под
 // неудачу total-API отдаём 503 (не stale 404 — пусть Yandex повторит).
 app.get('/sitemap.xml', async (req, res) => {
@@ -1521,6 +1670,7 @@ app.get('/sitemap.xml', async (req, res) => {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url><loc>https://fc-sever.ru/</loc><changefreq>daily</changefreq></url>
   <url><loc>https://fc-sever.ru/teams</loc><changefreq>daily</changefreq></url>
+  <url><loc>https://fc-sever.ru/map</loc><changefreq>weekly</changefreq></url>
   <url><loc>https://fc-sever.ru/app/list</loc><changefreq>daily</changefreq></url>
 ${teamsUrls}
 ${tournamentsUrls}
