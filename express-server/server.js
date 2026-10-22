@@ -988,9 +988,25 @@ const buildMatchSsrBody = (m) => {
       <ul>${items}</ul>`;
   }
 
+  // Голы сыгранного матча с записью: у голов с видео — ссылка ?goal=N
+  // (часть 2 голов с видео; та же нумерация, что в карточке).
+  let goalsBlock = '';
+  if (Array.isArray(m.goals) && m.goals.length > 0) {
+    const items = m.goals.map((g) => {
+      const text = `${g.minute}' ${g.scoreAfter} ${escapeHtml(g.team)}`;
+      return g.video
+        ? `<li><a href="/match/${m.gameId}?goal=${Number(g.n)}">${text} — смотреть гол</a></li>`
+        : `<li>${text}</li>`;
+    }).join('');
+    goalsBlock = `
+      <h2>Голы матча</h2>
+      <ul>${items}</ul>`;
+  }
+
   return `
     <h1>${escapeHtml(m.home)} — ${escapeHtml(m.guest)}</h1>
     ${headLine}
+    ${goalsBlock}
     ${forecastBlock}
     ${linksBlock}
   `;
@@ -1052,6 +1068,15 @@ app.get('/match/:gameId', async (req, res) => {
   const m = await fetchMatchSummary(gameId);
   const canonicalUrl = `https://fc-sever.ru/match/${gameId}`;
 
+  // ?goal=N — ссылка на конкретный гол из карточки (часть 2 голов с видео):
+  // превью в мессенджере должно показывать гол, а не матч целиком.
+  // canonical остаётся без параметра — одна страница в индексе.
+  const goalParam = /^[1-9]\d{0,2}$/.test(String(req.query.goal || '')) ? Number(req.query.goal) : null;
+  const goal = m && goalParam && Array.isArray(m.goals)
+    ? m.goals.find((g) => Number(g.n) === goalParam && g.video)
+    : null;
+  const ogUrl = goal ? `${canonicalUrl}?goal=${goal.n}` : canonicalUrl;
+
   let title, description, jsonLd = '';
   if (!m) {
     // 404 от API или таймаут — generic OG, шелл всё равно отдаём, клиент
@@ -1061,7 +1086,10 @@ app.get('/match/:gameId', async (req, res) => {
   } else {
     const dateStr = formatMatchDate(m.datetime);
     const dateTail = dateStr ? `, ${dateStr}` : '';
-    if (m.state === 'finished' && m.homeScore != null && m.guestScore != null) {
+    if (goal && m.homeScore != null && m.guestScore != null) {
+      title = `⚽ ${goal.minute}' ${goal.scoreAfter} ${goal.team} — ${m.home} ${m.homeScore}:${m.guestScore} ${m.guest}`;
+      description = `Гол на видео: ${goal.team} на ${goal.minute}-й минуте, счёт ${goal.scoreAfter}. Матч ${m.home} — ${m.guest}${dateTail}. Смотри момент в один тап.`;
+    } else if (m.state === 'finished' && m.homeScore != null && m.guestScore != null) {
       title = `${m.home} ${m.homeScore}:${m.guestScore} ${m.guest}${dateTail} — GameChallenge`;
       description = `Матч ${m.home} — ${m.guest} завершён со счётом ${m.homeScore}:${m.guestScore}. Посмотри, кто угадал.`;
     } else {
@@ -1079,7 +1107,7 @@ app.get('/match/:gameId', async (req, res) => {
     <meta name="description" content="${escapeHtml(description)}" />
     <meta property="og:title" content="${escapeHtml(title)}" />
     <meta property="og:description" content="${escapeHtml(description)}" />
-    <meta property="og:url" content="${canonicalUrl}" />
+    <meta property="og:url" content="${ogUrl}" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="GameChallenge" />
     <meta property="og:image" content="https://fc-sever.ru/img/og/match-default.png" />
