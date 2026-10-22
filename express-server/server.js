@@ -910,6 +910,20 @@ const escapeHtml = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => 
 ));
 
 const MONTHS_RU = ['января','февраля','марта','апреля','мая','июня','июля','августа','сентября','октября','ноября','декабря'];
+// Метка «🎥 N голов» у сыгранного матча с голами на видео (total, часть 3
+// голов с видео). Текст дублирует total/server/src/uilts/videoGoals — другой
+// runtime, три слова не выносим.
+const pluralRu = (n, forms) => {
+  const abs = Math.abs(Math.trunc(n));
+  const mod100 = abs % 100;
+  if (mod100 >= 11 && mod100 <= 14) return forms[2];
+  const mod10 = abs % 10;
+  if (mod10 === 1) return forms[0];
+  if (mod10 >= 2 && mod10 <= 4) return forms[1];
+  return forms[2];
+};
+const videoGoalsLabel = (n) => (n > 0 ? `🎥 ${n} ${pluralRu(n, ['гол', 'гола', 'голов'])}` : '');
+
 const formatMatchDate = (unixSec) => {
   if (!unixSec) return '';
   const d = new Date(unixSec * 1000);
@@ -1117,7 +1131,23 @@ const buildTeamSsrBody = (t) => {
     const items = past.map((m) => {
       const date = formatMatchDate(m.datetime);
       const score = (m.homeScore != null && m.guestScore != null) ? ` ${m.homeScore}:${m.guestScore}` : '';
-      return `<li><a href="/match/${m.gameId}">${escapeHtml(m.home)} —${escapeHtml(score)} ${escapeHtml(m.guest)}</a>${date ? ` (${escapeHtml(date)})` : ''}</li>`;
+      const video = videoGoalsLabel(Number(m.videoGoals || 0));
+      return `<li><a href="/match/${m.gameId}">${escapeHtml(m.home)} —${escapeHtml(score)} ${escapeHtml(m.guest)}</a>${date ? ` (${escapeHtml(date)})` : ''}${video ? ` · ${video}` : ''}</li>`;
+    }).join('');
+    parts.push(`<ul>${items}</ul>`);
+  }
+
+  // «Голы команды»: матчи с голами этой команды на видео, ссылка открывает
+  // карточку с плеером на первом голе (?goal=N).
+  const videoGoals = Array.isArray(t.videoGoals) ? t.videoGoals : [];
+  if (videoGoals.length > 0) {
+    parts.push('<h2>Голы команды</h2>');
+    const items = videoGoals.map((v) => {
+      const date = formatMatchDate(v.datetime);
+      const opponent = v.isHome ? v.guest : v.home;
+      const where = v.isHome ? 'дома с' : 'в гостях с';
+      const score = `${v.homeScore}:${v.guestScore}`;
+      return `<li><a href="/match/${v.gameId}?goal=${Number(v.firstGoal) || 1}">${escapeHtml(where)} ${escapeHtml(opponent)} ${escapeHtml(score)} — ${escapeHtml(videoGoalsLabel(Number(v.goals || 0)))}</a>${date ? ` (${escapeHtml(date)})` : ''}</li>`;
     }).join('');
     parts.push(`<ul>${items}</ul>`);
   }
@@ -1278,7 +1308,8 @@ app.get('/tournament/:slug', async (req, res) => {
   const matchLi = (m) => {
     const date = formatMatchDate(m.datetime);
     const score = (m.homeScore != null && m.guestScore != null) ? ` ${m.homeScore}:${m.guestScore}` : '';
-    return `<li><a href="/match/${m.gameId}">${escapeHtml(m.home)} —${escapeHtml(score)} ${escapeHtml(m.guest)}</a>${date ? ` (${escapeHtml(date)})` : ''}</li>`;
+    const video = videoGoalsLabel(Number(m.videoGoals || 0));
+    return `<li><a href="/match/${m.gameId}">${escapeHtml(m.home)} —${escapeHtml(score)} ${escapeHtml(m.guest)}</a>${date ? ` (${escapeHtml(date)})` : ''}${video ? ` · ${video}` : ''}</li>`;
   };
   const upcomingHtml = (t.upcomingMatches || []).map(matchLi).join('');
   const recentHtml = (t.recentMatches || []).map(matchLi).join('');
