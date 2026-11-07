@@ -9,7 +9,7 @@ const p = path.resolve(home, '.ssh', 'id_rsa');
 console.log("Path", p);
 
 ssh.connect({
-    host: '95.140.158.22',
+    host: '45.137.152.135',
     username: 'root',
     privateKeyPath: '/users/avvinokurov/.ssh/id_rsa',
 }).then((ssh) => {

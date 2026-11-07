@@ -43,7 +43,7 @@ function uploadDirectory(conn, sftp, localDir, remoteDir) {
     console.log('Client :: ready');
     uploadDirectory(conn, localDirectory, remoteDirectory);
   }).connect({
-    host: '95.140.158.22',
+    host: '45.137.152.135',
     port: 22,
     username: 'root',
     privateKey: fs.readFileSync('/Users/avvinokurov/.ssh/id_rsa') // Если вы используете аутентификацию по ключу
