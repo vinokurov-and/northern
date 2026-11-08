@@ -132,7 +132,8 @@ jobs:
             # и продолжает держать 443 → новый node падает с EADDRINUSE, а
             # lsof -i:443 видит старого и рапортует 'OK'. Именно так тихо
             # провалился предыдущий deploy (выяснено 2026-04-25).
-            screen -S server -X quit 2>/dev/null || true
+            # screen ищет -S по префиксу: без сессии server quit убил бы server-app (total).
+            screen -ls | grep -qE '[0-9]+\.server[[:space:]]' && screen -S server -X quit 2>/dev/null || true
             sleep 2
 
             # Graceful cleanup существующего листенера на 443. Разрешаем kill
